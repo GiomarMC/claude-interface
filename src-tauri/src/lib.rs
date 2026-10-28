@@ -1,5 +1,6 @@
 mod claude;
 mod files;
+mod terminal;
 
 use std::sync::Mutex;
 
@@ -22,6 +23,12 @@ pub fn run() {
             files::run_shell,
             files::initial_cwd,
             files::user_settings,
+            files::claude_theme,
+            files::run_statusline,
+            files::app_config,
+            files::save_app_config,
+            terminal::terminal_style,
+            terminal::detected_terminals,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -271,17 +271,8 @@ pub struct ShellOutput {
 /// Modo `!`: ejecuta el comando localmente, sin pasar por Claude.
 #[tauri::command]
 pub async fn run_shell(cwd: String, command: String) -> Result<ShellOutput, String> {
-    let mut cmd = if cfg!(windows) {
-        let mut c = Command::new("cmd");
-        c.args(["/C", &command]);
-        c
-    } else {
-        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
-        let mut c = Command::new(shell);
-        c.args(["-c", &command]);
-        c
-    };
-    let out = cmd.current_dir(cwd).output().map_err(|e| e.to_string())?;
+    let out = shell_command(&command)
+        .current_dir(cwd).output().map_err(|e| e.to_string())?;
     let mut output = String::from_utf8_lossy(&out.stdout).into_owned();
     output.push_str(&String::from_utf8_lossy(&out.stderr));
     Ok(ShellOutput { output, code: out.status.code() })
@@ -300,10 +291,103 @@ pub fn initial_cwd() -> Option<String> {
     path.is_dir().then(|| path.to_string_lossy().into_owned())
 }
 
+fn read_json(path: PathBuf) -> Option<Value> {
+    serde_json::from_str(&fs::read_to_string(path).ok()?).ok()
+}
+
+/// Settings efectivos con la misma precedencia que Claude Code:
+/// usuario < proyecto (.claude/settings.json) < local (.claude/settings.local.json).
 #[tauri::command]
-pub fn user_settings() -> Value {
-    home_dir()
-        .and_then(|h| fs::read_to_string(h.join(".claude").join("settings.json")).ok())
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or(Value::Null)
+pub fn user_settings(cwd: Option<String>) -> Value {
+    let mut merged = serde_json::Map::new();
+    let mut layers = vec![];
+    if let Some(home) = home_dir() {
+        layers.push(home.join(".claude").join("settings.json"));
+    }
+    if let Some(cwd) = cwd.filter(|c| !c.is_empty()) {
+        let dir = PathBuf::from(cwd).join(".claude");
+        layers.push(dir.join("settings.json"));
+        layers.push(dir.join("settings.local.json"));
+    }
+    for layer in layers {
+        if let Some(Value::Object(map)) = read_json(layer) {
+            merged.extend(map);
+        }
+    }
+    Value::Object(merged)
+}
+
+/// Tema elegido en Claude Code (`/theme`), guardado en ~/.claude.json.
+#[tauri::command]
+pub fn claude_theme() -> Option<String> {
+    let v = read_json(home_dir()?.join(".claude.json"))?;
+    v.get("theme")?.as_str().map(String::from)
+}
+
+fn shell_command(command: &str) -> Command {
+    if cfg!(windows) {
+        let mut c = Command::new("cmd");
+        c.args(["/C", command]);
+        c
+    } else {
+        let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
+        let mut c = Command::new(shell);
+        c.args(["-c", command]);
+        c
+    }
+}
+
+/// Ejecuta el `statusLine.command` del usuario igual que Claude Code: el
+/// JSON de la sesión por stdin y la salida (con colores ANSI) por stdout.
+#[tauri::command]
+pub async fn run_statusline(command: String, input: String, cwd: String) -> Result<String, String> {
+    use std::io::Write;
+    use std::process::Stdio;
+    use std::time::{Duration, Instant};
+
+    let mut child = shell_command(&command)
+        .current_dir(&cwd)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(input.as_bytes());
+    }
+    let start = Instant::now();
+    loop {
+        if child.try_wait().map_err(|e| e.to_string())?.is_some() {
+            break;
+        }
+        if start.elapsed() > Duration::from_secs(5) {
+            let _ = child.kill();
+            return Err("statusline: tiempo agotado".into());
+        }
+        std::thread::sleep(Duration::from_millis(15));
+    }
+    let out = child.wait_with_output().map_err(|e| e.to_string())?;
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+fn app_config_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+    use tauri::Manager;
+    Some(app.path().app_config_dir().ok()?.join("config.json"))
+}
+
+/// Preferencias propias de la app (fuente, tamaño, tema forzado).
+#[tauri::command]
+pub fn app_config(app: tauri::AppHandle) -> Value {
+    app_config_path(&app)
+        .and_then(read_json)
+        .unwrap_or_else(|| Value::Object(Default::default()))
+}
+
+#[tauri::command]
+pub fn save_app_config(app: tauri::AppHandle, config: Value) -> Result<(), String> {
+    let path = app_config_path(&app).ok_or("sin directorio de configuración")?;
+    if let Some(dir) = path.parent() {
+        fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    }
+    fs::write(path, serde_json::to_string_pretty(&config).unwrap()).map_err(|e| e.to_string())
 }
