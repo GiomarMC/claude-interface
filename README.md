@@ -1,8 +1,16 @@
 # Claude Interface
 
-Interfaz de escritorio para [Claude Code](https://docs.claude.com/en/docs/claude-code) con el look de la TUI —tema oscuro, acento naranja, fuente monoespaciada y statusline de tres filas— pero con la interacción de una app gráfica.
+Interfaz de escritorio para [Claude Code](https://docs.claude.com/en/docs/claude-code) con el look de la TUI, pero con la interacción de una app gráfica.
 
 No reemplaza a Claude Code: lanza tu `claude` instalado en modo `stream-json`, así que usa tu cuenta, tu `settings.json`, tus skills, MCP, `CLAUDE.md` y tus sesiones.
+
+## Se adapta a cada usuario
+
+- **Statusline:** ejecuta el `statusLine.command` de tus settings igual que Claude Code (mismo JSON por stdin) y pinta su salida ANSI. Sin statusline configurado, muestra uno sencillo.
+- **Settings:** combina `~/.claude/settings.json`, `.claude/settings.json` y `.claude/settings.local.json` del proyecto, con la misma precedencia que Claude Code.
+- **Tema:** usa el `/theme` de Claude Code (`dark`, `light`, `*-daltonized`, `*-ansi`). Se puede forzar otro con `/theme`.
+- **Terminal:** Claude Code toma el fondo, la fuente y la paleta de la terminal donde corre; la app lee esos mismos datos de tu emulador (Konsole, GNOME Terminal, kitty, Alacritty, Ghostty, foot o Windows Terminal) y se ve igual. `/terminal` muestra cuál detectó y permite elegir otra o desactivarlo.
+- **Fuente:** la de tu terminal por defecto; `/font <familia>`, `/font <tamaño>` o `Ctrl +`/`Ctrl -`/`Ctrl 0` la cambian.
 
 ## Funciones
 
@@ -11,10 +19,9 @@ No reemplaza a Claude Code: lanza tu `claude` instalado en modo `stream-json`, a
 - **Copiar** cada respuesta como Markdown y cada bloque de código con un clic.
 - **Exportar** la conversación a `.md` (`/export` o `Ctrl+Shift+E`).
 - **Permisos** con el mismo diálogo de la TUI (1/2/3, ↑/↓, Esc), `AskUserQuestion` y aprobación de planes.
-- **Modos** con `Shift+Tab`: normal, accept edits, plan, bypass.
-- **Comandos `/`** con autocompletado de tus comandos y skills, más `/resume`, `/clear`, `/cd`, `/model`, `/effort`, `/copy`.
+- **Modos** con `Shift+Tab`: normal, accept edits, plan, auto, bypass.
+- **Comandos `/`** con autocompletado de tus comandos y skills, más `/resume`, `/clear`, `/cd`, `/model`, `/effort`, `/copy`, `/font`, `/theme`, `/terminal`.
 - **`!comando`** ejecuta en tu shell local sin gastar tokens; la salida se adjunta como contexto al siguiente mensaje.
-- **Statusline**: modelo, repo, rama y diff, effort, barra de contexto, límites de 5h/7d, coste y duración.
 
 ## Requisitos
 
@@ -60,6 +67,10 @@ git tag v0.1.0 && git push origin v0.1.0
 ## Arquitectura
 
 - `src-tauri/src/claude.rs`: lanza `claude -p --input-format stream-json --output-format stream-json --permission-prompt-tool stdio` y reenvía cada línea a la UI.
-- `src-tauri/src/files.rs`: lectura de adjuntos, info de git, historial de sesiones (`~/.claude/projects`), shell local.
+- `src-tauri/src/files.rs`: lectura de adjuntos, info de git, settings combinados, statusline, historial de sesiones (`~/.claude/projects`), shell local.
+- `src-tauri/src/terminal.rs`: lectura de la configuración de los emuladores de terminal.
 - `src/lib/session.svelte.ts`: estado de la sesión e interpretación del protocolo.
+- `src/lib/prefs.svelte.ts`: tema, fuente y estilo de terminal.
 - `src/lib/components/`: transcripción, herramientas, permisos, prompt y statusline.
+
+La configuración propia de la app (fuente, tema o terminal forzados) se guarda en `config.json` dentro del directorio de configuración de la app (`~/.config/dev.giomarmc.claudeinterface/` en Linux).

@@ -1,6 +1,6 @@
 [package]
 name = "claude-interface"
-version = "0.1.0"
+version = "0.1.1"
 description = "Interfaz de escritorio para Claude Code"
 authors = ["GiomarMC"]
 edition = "2024"
@@ -25,6 +25,7 @@ serde_json = "1"
 tauri-plugin-dialog = "2"
 tauri-plugin-clipboard-manager = "2"
 base64 = "0.22"
+toml = "0.8"
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
