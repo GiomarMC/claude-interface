@@ -1,113 +1,115 @@
 <script lang="ts">
-  // Réplica de ~/.claude/statusline-command.sh
-  import { barColor, fmtCost, fmtMs, fmtNum, fmtReset, modelName } from "$lib/format";
+  // Ejecuta el `statusLine.command` del usuario, como Claude Code. Si no
+  // tiene uno configurado, muestra un statusline sencillo por defecto.
+  import { invoke } from "@tauri-apps/api/core";
+  import { onDestroy } from "svelte";
+  import { ansiToHtml } from "$lib/ansi";
+  import { barColor, fmtNum, modelName } from "$lib/format";
+  import { prefs } from "$lib/prefs.svelte";
   import type { Session } from "$lib/session.svelte";
 
   let { s }: { s: Session } = $props();
 
-  const WIDTH = 40;
+  let lines = $state<string[]>([]);
+  let failed = $state(false);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let running = false;
+  let again = false;
+
+  async function run() {
+    const command = s.statusLineCommand;
+    if (!command || !s.cwd) return;
+    if (running) {
+      again = true;
+      return;
+    }
+    running = true;
+    try {
+      const out = await invoke<string>("run_statusline", { command, input: s.statusLineInput(), cwd: s.cwd });
+      lines = out.replace(/\n+$/, "").split("\n").map(ansiToHtml);
+      failed = false;
+    } catch {
+      failed = true;
+    } finally {
+      running = false;
+      if (again) {
+        again = false;
+        schedule();
+      }
+    }
+  }
+
+  function schedule() {
+    clearTimeout(timer);
+    timer = setTimeout(run, 300);
+  }
+
+  // Igual que Claude Code: se refresca cuando cambia el estado de la sesión.
+  $effect(() => {
+    void [
+      s.statusLineCommand, s.cwd, s.model, s.modelPref, s.mode, s.effort, s.contextUsed,
+      s.contextMax, s.costUsd, s.fiveHour, s.sevenDay, s.busy, s.items.length, s.git,
+      prefs.terminal, prefs.theme,
+    ];
+    schedule();
+  });
+
+  // Los contadores de reinicio cambian aunque no haya actividad.
+  const tick = setInterval(() => s.statusLineCommand && !s.busy && run(), 30_000);
+  onDestroy(() => {
+    clearInterval(tick);
+    clearTimeout(timer);
+  });
+
   const model = $derived(modelName(s.model) || s.modelPref || "claude");
-  const pct = $derived(s.contextPct ?? 0);
-  const filled = $derived(Math.min(WIDTH, Math.floor((pct / 100) * WIDTH)));
-  const tip = $derived(filled < WIDTH);
-  const empty = $derived(Math.max(0, WIDTH - filled - (tip ? 1 : 0)));
-  const color = $derived(barColor(pct));
-  const effortIcon = $derived(
-    ({ low: "🟢", medium: "🟡", high: "🔴" } as Record<string, string>)[s.effort] ?? "🔒",
-  );
+  const pct = $derived(Math.round(s.contextPct ?? 0));
 </script>
 
 <div class="sl">
-  <div class="row">
-    <span class="w bold">[{model}{s.contextMax ? ` (${fmtNum(s.contextMax)})` : ""}]</span>
-    {#if s.thinking}<span>🧠</span>{/if}
-    {#if s.fast}<span>⚡fast</span>{/if}
-    {#if s.git}
-      <span class="d">🖥</span>
-      <span class="w">{s.git.repo}</span>
-      {#if s.git.branch}
-        <span class="d sep">│</span>
-        <span class="w">🌿 {s.git.branch}</span>
-        {#if s.git.insertions || s.git.deletions}
-          <span><span class="d">+{s.git.insertions}</span> <span class="r">-{s.git.deletions}</span></span>
-        {/if}
-      {/if}
-    {/if}
-    {#if s.effort}
-      <span class="d sep">│</span>
-      <span>{effortIcon} <span class="d">{s.effort}</span></span>
-    {/if}
-  </div>
-
-  {#if s.contextPct != null && s.contextMax}
-    <div class="row bar">
-      <span class="d">[</span><span class="bold" style:color>{"█".repeat(filled)}</span>{#if tip}<span class="d">▓</span>{/if}<span class="d">{"░".repeat(empty)}</span><span class="d">]</span>
-      <span class="pct bold" style:color>{Math.round(pct)}%</span>
-      <span class="d">{fmtNum(s.contextUsed ?? 0)} / {fmtNum(s.contextMax)}</span>
-    </div>
-  {/if}
-
-  {#if s.fiveHour || s.sevenDay || s.costUsd != null || s.durationMs}
+  {#if s.statusLineCommand && !failed}
+    {#each lines as l}
+      <div class="ansi">{@html l}</div>
+    {/each}
+  {:else}
     <div class="row">
-      {#if s.fiveHour}
-        <span>⏱ <span class="w bold">{Math.round(s.fiveHour.pct)}%</span> <span class="d">5h · resets {fmtReset(s.fiveHour.resetsAt)}</span></span>
+      <span class="bold">{model}</span>
+      {#if s.git}
+        <span class="dim">·</span>
+        <span>{s.git.repo}{#if s.git.branch}<span class="dim"> ({s.git.branch})</span>{/if}</span>
       {/if}
-      {#if s.sevenDay}
-        <span class="d sep">│</span>
-        <span>📅 <span class="w bold">{Math.round(s.sevenDay.pct)}%</span> <span class="d">7d · resets {fmtReset(s.sevenDay.resetsAt)}</span></span>
+      {#if s.contextMax}
+        <span class="dim">·</span>
+        <span><span style:color={barColor(pct)}>{pct}%</span> <span class="dim">contexto ({fmtNum(s.contextUsed ?? 0)} / {fmtNum(s.contextMax)})</span></span>
       {/if}
-      {#if s.costUsd != null}
-        <span class="d sep">│</span>
-        <span>💰 <span class="m bold">${fmtCost(s.costUsd)}</span></span>
-      {/if}
-      {#if s.durationMs}
-        <span class="d sep">│</span>
-        <span>⏺ <span class="t">{fmtMs(s.durationMs)}</span></span>
-      {/if}
-      {#if s.apiMs}
-        <span class="d sep">│</span>
-        <span>⚡ <span class="t">{fmtMs(s.apiMs)}</span></span>
+      {#if s.effort}
+        <span class="dim">· {s.effort}</span>
       {/if}
     </div>
+    {#if failed}
+      <div class="faint">statusline: el comando falló o tardó más de 5 s</div>
+    {/if}
   {/if}
 </div>
 
 <style>
   .sl {
     padding: 0.3em 1ch 0;
-    font-size: 13px;
+    font-size: calc(var(--font-size) - 1px);
     line-height: 1.5;
+    min-height: 1.5em;
+  }
+  .ansi {
+    white-space: pre;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .row {
     display: flex;
     flex-wrap: wrap;
-    align-items: baseline;
     column-gap: 1ch;
-    white-space: nowrap;
+    color: var(--text-dim);
   }
-  .bar {
-    column-gap: 0;
-  }
-  .bar .pct {
-    margin-left: 2ch;
-    margin-right: 2ch;
-  }
-  .sep {
-    padding: 0 0.5ch;
-  }
-  .w {
-    color: var(--sl-white);
-  }
-  .d {
-    color: var(--sl-dim);
-  }
-  .r {
-    color: var(--sl-red);
-  }
-  .m {
-    color: var(--sl-mauve);
-  }
-  .t {
-    color: var(--sl-teal);
+  .row .bold {
+    color: var(--text);
   }
 </style>
