@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { modelName } from "./format";
 
 export type Attachment = {
   name: string;
@@ -44,8 +45,9 @@ export type PermissionRequest = {
 
 export type SlashCommand = { name: string; description: string; argumentHint?: string; local?: boolean };
 
-export type PermissionMode = "default" | "acceptEdits" | "plan" | "bypassPermissions";
-export const MODES: PermissionMode[] = ["default", "acceptEdits", "plan", "bypassPermissions"];
+export type PermissionMode = "default" | "acceptEdits" | "plan" | "auto" | "bypassPermissions";
+/** Mismo orden que shift+tab en la TUI. */
+export const MODES: PermissionMode[] = ["default", "acceptEdits", "plan", "auto", "bypassPermissions"];
 
 type GitInfo = { repo: string; branch: string | null; insertions: number; deletions: number };
 
@@ -56,6 +58,9 @@ const LOCAL_COMMANDS: SlashCommand[] = [
   { name: "export", description: "Exporta la conversación a Markdown", local: true },
   { name: "model", description: "Cambia el modelo (opus, sonnet, haiku…)", argumentHint: "<modelo>", local: true },
   { name: "effort", description: "Cambia el nivel de esfuerzo", argumentHint: "low|medium|high|xhigh|max", local: true },
+  { name: "font", description: "Fuente y tamaño de la app", argumentHint: "<familia>|<tamaño>|reset", local: true },
+  { name: "terminal", description: "Estilo de terminal a imitar (fondo, fuente, paleta)", argumentHint: "auto|off|konsole|kitty|…", local: true },
+  { name: "theme", description: "Tema de la app (por defecto, el de Claude Code)", argumentHint: "dark|light|…|auto|claude", local: true },
 ];
 
 let nextId = 1;
@@ -82,6 +87,11 @@ export class Session {
   effort = $state("");
   thinking = $state(false);
   fast = $state(false);
+  outputStyle = $state("default");
+  /** `statusLine.command` de los settings efectivos, si el usuario tiene uno. */
+  statusLineCommand = $state<string | null>(null);
+  linesAdded = $state(0);
+  linesRemoved = $state(0);
   commands = $state<SlashCommand[]>(LOCAL_COMMANDS);
 
   contextUsed = $state<number | null>(null);
@@ -97,6 +107,10 @@ export class Session {
 
   /** Salidas de comandos `!` que se adjuntan como contexto al siguiente mensaje. */
   shellContext: string[] = [];
+
+  /** /model y /effort elegidos en la app; si no, manda la config de Claude Code. */
+  private modelOverride = false;
+  private effortOverride = false;
 
   private pending = new Map<string, (r: any) => void>();
   private toolIndex = new Map<string, number>();
@@ -123,10 +137,14 @@ export class Session {
         this.stderr = [...this.stderr.slice(-30), e.payload.line];
       }),
     );
+  }
 
-    const settings: any = await invoke("user_settings");
-    this.effort = settings?.effortLevel ?? "";
-    this.modelPref = settings?.model ?? "";
+  private async loadSettings() {
+    const settings: any = await invoke("user_settings", { cwd: this.cwd });
+    if (!this.effortOverride) this.effort = settings?.effortLevel ?? "";
+    if (!this.modelOverride) this.modelPref = settings?.model ?? "";
+    const sl = settings?.statusLine;
+    this.statusLineCommand = sl?.type === "command" && sl.command ? sl.command : null;
   }
 
   // ── Ciclo de vida ────────────────────────────────────────────────
@@ -141,6 +159,10 @@ export class Session {
       this.apiMs = 0;
       this.contextUsed = null;
       this.contextPct = null;
+      this.linesAdded = 0;
+      this.linesRemoved = 0;
+      this.model = "";
+      await this.loadSettings();
     }
     this.live = null;
     this.busy = false;
@@ -154,9 +176,9 @@ export class Session {
       opts: {
         key: this.key,
         cwd: opts.cwd,
-        model: this.modelPref || null,
-        permissionMode: this.mode,
-        effort: this.effort || null,
+        model: this.modelOverride ? this.modelPref : null,
+        permissionMode: this.mode === "default" ? null : this.mode,
+        effort: this.effortOverride ? this.effort : null,
         resume: opts.resume ?? null,
       },
     });
@@ -278,6 +300,7 @@ export class Session {
 
   async setModel(model: string) {
     this.modelPref = model;
+    this.modelOverride = true;
     const r = this.running ? await this.control({ subtype: "set_model", model }) : null;
     this.notice(`Modelo: ${model}`, "info");
     if (r === null && this.running) await this.restartKeeping();
@@ -286,6 +309,7 @@ export class Session {
 
   async setEffort(level: string) {
     this.effort = level;
+    this.effortOverride = true;
     this.notice(`Esfuerzo: ${level}`, "info");
     if (this.running && !this.busy) await this.restartKeeping();
   }
@@ -367,7 +391,9 @@ export class Session {
       this.sessionId = m.session_id;
       this.model = m.model;
       this.version = m.claude_code_version ?? this.version;
-      if (m.permissionMode && MODES.includes(m.permissionMode)) this.mode = m.permissionMode;
+      this.outputStyle = m.output_style ?? "default";
+      const mode = m.permissionMode === "manual" ? "default" : m.permissionMode;
+      if (MODES.includes(mode)) this.mode = mode;
       this.fast = m.fast_mode_state === "on";
     } else if (m.subtype === "thinking_tokens") {
       this.thinkingTokens = m.estimated_tokens ?? this.thinkingTokens;
@@ -435,10 +461,75 @@ export class Session {
           isError: !!b.is_error,
           meta: typeof meta === "object" ? meta : undefined,
         };
+        if (!b.is_error) this.countLines(tool.name, tool.input, tool.result.meta);
       } else if (b.type === "text") {
         this.pushUserText(b.text);
       }
     }
+  }
+
+  private countLines(name: string, input: any, meta: any) {
+    if (name === "Write") {
+      this.linesAdded += String(input?.content ?? "").split("\n").length;
+    } else if (name === "Edit" || name === "MultiEdit") {
+      for (const h of meta?.structuredPatch ?? []) {
+        for (const l of h.lines ?? []) {
+          if (l[0] === "+") this.linesAdded++;
+          else if (l[0] === "-") this.linesRemoved++;
+        }
+      }
+    }
+  }
+
+  /** Mismo JSON que Claude Code envía por stdin al comando del statusline. */
+  statusLineInput(): string {
+    const pct = this.contextPct;
+    const encoded = this.cwd.replace(/[^A-Za-z0-9]/g, "-");
+    const sep = this.home.includes("\\") ? "\\" : "/";
+    const model = this.model || this.modelPref;
+    return JSON.stringify({
+      hook_event_name: "Status",
+      session_id: this.sessionId ?? "",
+      transcript_path: this.sessionId
+        ? [this.home, ".claude", "projects", encoded, `${this.sessionId}.jsonl`].join(sep)
+        : "",
+      cwd: this.cwd,
+      model: { id: model, display_name: modelName(model) || model },
+      workspace: { current_dir: this.cwd, project_dir: this.cwd },
+      version: this.version,
+      output_style: { name: this.outputStyle },
+      cost: {
+        total_cost_usd: this.costUsd ?? 0,
+        total_duration_ms: this.durationMs,
+        total_api_duration_ms: this.apiMs,
+        total_lines_added: this.linesAdded,
+        total_lines_removed: this.linesRemoved,
+      },
+      context_window: this.contextMax
+        ? {
+            context_window_size: this.contextMax,
+            total_input_tokens: this.contextUsed ?? 0,
+            used_percentage: pct ?? 0,
+            remaining_percentage: 100 - (pct ?? 0),
+          }
+        : undefined,
+      exceeds_200k_tokens: (this.contextUsed ?? 0) > 200_000,
+      rate_limits:
+        this.fiveHour || this.sevenDay
+          ? {
+              five_hour: this.fiveHour
+                ? { used_percentage: this.fiveHour.pct, resets_at: this.fiveHour.resetsAt }
+                : undefined,
+              seven_day: this.sevenDay
+                ? { used_percentage: this.sevenDay.pct, resets_at: this.sevenDay.resetsAt }
+                : undefined,
+            }
+          : undefined,
+      effort: this.effort ? { level: this.effort } : undefined,
+      thinking: { enabled: this.thinking },
+      fast_mode: this.fast,
+      permission_mode: this.mode,
+    });
   }
 
   /** Texto de usuario que llega desde el historial (o salida de comandos locales). */

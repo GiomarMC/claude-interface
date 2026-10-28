@@ -172,6 +172,7 @@
       default: null,
       acceptEdits: { label: "⏵⏵ accept edits on", color: "var(--auto-accept)" },
       plan: { label: "⏸ plan mode on", color: "var(--plan)" },
+      auto: { label: "⏵⏵ auto mode on", color: "var(--warning)" },
       bypassPermissions: { label: "⏵⏵ bypass permissions on", color: "var(--error)" },
     } as const)[s.mode],
   );
@@ -253,7 +254,7 @@
     border: 1px solid var(--border-faint);
     border-radius: 6px;
     padding: 0.1em 0.8ch;
-    font-size: 13px;
+    font-size: 0.93em;
     color: var(--suggestion);
     max-width: 48ch;
     white-space: nowrap;
@@ -285,7 +286,7 @@
     padding: 0.35em 1ch;
   }
   .box:focus-within {
-    border-color: #a8a8a8;
+    border-color: var(--text-dim);
   }
   .box.bash {
     border-color: var(--bash);
@@ -349,6 +350,6 @@
   }
   .hints {
     padding: 0.2em 1ch 0;
-    font-size: 13px;
+    font-size: 0.93em;
   }
 </style>
