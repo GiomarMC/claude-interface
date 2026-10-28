@@ -1,0 +1,270 @@
+/* Paleta del tema oscuro de Claude Code + colores ANSI-256 del statusline. */
+:root {
+  --bg: #141413;
+  --bg-raised: #1c1c1b;
+  --bg-user: #262624;
+  --bg-hover: #2a2a28;
+  --text: #ececec;
+  --text-dim: #999999;
+  --text-faint: #6b6b6b;
+
+  --claude: #d77757;
+  --claude-shimmer: #eb9f7f;
+  --border: #888888;
+  --border-faint: #3a3a38;
+  --success: #4eba65;
+  --error: #ff6b80;
+  --warning: #ffc107;
+  --suggestion: #b1b9f9;
+  --permission: #b1b9f9;
+  --plan: #48968c;
+  --auto-accept: #af87ff;
+  --bash: #fd5db1;
+  --diff-add: #225c2b;
+  --diff-add-text: #b7e1bf;
+  --diff-del: #7a2936;
+  --diff-del-text: #f3b8c1;
+
+  /* statusline-command.sh: 38;5;N */
+  --sl-green: #5fff00;   /* 82  */
+  --sl-cyan: #00ffff;    /* 51  */
+  --sl-amber: #ffd700;   /* 220 */
+  --sl-red: #ff0000;     /* 196 */
+  --sl-white: #eeeeee;   /* 255 */
+  --sl-dim: #626262;     /* 241 */
+  --sl-mauve: #af5fff;   /* 135 */
+  --sl-teal: #5fafff;    /* 75  */
+
+  --font: "MesloLGS Nerd Font Mono", "MesloLGS Nerd Font", "MesloLGS NF",
+    "JetBrains Mono", "Cascadia Code", "Fira Code", "DejaVu Sans Mono", Menlo,
+    Consolas, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", monospace;
+  --font-size: 14px;
+  --line: 1.45;
+  --gutter: 2ch;
+
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--font-size);
+  line-height: var(--line);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+::selection {
+  background: rgba(215, 119, 87, 0.35);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #333331;
+  border: 3px solid var(--bg);
+  border-radius: 6px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #4a4a47;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+.dim {
+  color: var(--text-dim);
+}
+.faint {
+  color: var(--text-faint);
+}
+.bold {
+  font-weight: 700;
+}
+
+/* ── Markdown con look de terminal ─────────────────────────────── */
+.md {
+  overflow-wrap: anywhere;
+}
+.md > :first-child {
+  margin-top: 0;
+}
+.md > :last-child {
+  margin-bottom: 0;
+}
+.md p,
+.md ul,
+.md ol,
+.md pre,
+.md blockquote,
+.md table {
+  margin: 0 0 0.75em;
+}
+.md h1,
+.md h2,
+.md h3,
+.md h4 {
+  font-size: 1em;
+  margin: 1em 0 0.5em;
+  font-weight: 700;
+}
+.md h1 {
+  text-decoration: underline;
+  font-style: italic;
+}
+.md h2,
+.md h3 {
+  color: var(--text);
+}
+.md ul,
+.md ol {
+  padding-left: 3ch;
+}
+.md li {
+  margin: 0.1em 0;
+}
+.md ul > li::marker {
+  content: "- ";
+  color: var(--text-dim);
+}
+.md a {
+  color: var(--suggestion);
+}
+.md strong {
+  color: #fff;
+}
+.md em {
+  color: var(--text);
+}
+.md hr {
+  border: none;
+  border-top: 1px solid var(--border-faint);
+  margin: 1em 0;
+}
+.md blockquote {
+  border-left: 2px solid var(--text-faint);
+  margin-left: 0;
+  padding-left: 1.5ch;
+  color: var(--text-dim);
+  font-style: italic;
+}
+.md code {
+  color: var(--suggestion);
+  font-family: var(--font);
+}
+.md pre {
+  position: relative;
+  background: var(--bg-raised);
+  border: 1px solid var(--border-faint);
+  border-radius: 6px;
+  padding: 0.75em 1.5ch;
+  overflow-x: auto;
+}
+.md pre code {
+  color: var(--text);
+  white-space: pre;
+}
+.md table {
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+.md th,
+.md td {
+  border: 1px solid var(--border-faint);
+  padding: 0.15em 1ch;
+  text-align: left;
+}
+.md th {
+  font-weight: 700;
+}
+.md img {
+  max-width: 100%;
+}
+
+.copy-code {
+  position: absolute;
+  top: 0.4em;
+  right: 0.6em;
+  font-size: 12px;
+  color: var(--text-faint);
+  background: var(--bg-raised);
+  padding: 0 0.6ch;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.md pre:hover .copy-code {
+  opacity: 1;
+}
+.copy-code:hover {
+  color: var(--claude);
+}
+
+/* ── highlight.js con colores ANSI ─────────────────────────────── */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in {
+  color: #c678dd;
+}
+.hljs-string,
+.hljs-attr-value,
+.hljs-template-string {
+  color: #98c379;
+}
+.hljs-number,
+.hljs-literal {
+  color: #d19a66;
+}
+.hljs-comment,
+.hljs-quote {
+  color: #6b6b6b;
+  font-style: italic;
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-section {
+  color: #61afef;
+}
+.hljs-type,
+.hljs-title.class_,
+.hljs-attr,
+.hljs-attribute {
+  color: #e5c07b;
+}
+.hljs-variable,
+.hljs-params,
+.hljs-property {
+  color: #e06c75;
+}
+.hljs-meta,
+.hljs-symbol {
+  color: #56b6c2;
+}
+.hljs-addition {
+  color: var(--diff-add-text);
+  background: var(--diff-add);
+}
+.hljs-deletion {
+  color: var(--diff-del-text);
+  background: var(--diff-del);
+}
