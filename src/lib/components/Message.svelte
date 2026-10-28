@@ -87,7 +87,7 @@
   }
   .chip {
     color: var(--suggestion);
-    font-size: 13px;
+    font-size: 0.93em;
   }
   .assistant {
     position: relative;
@@ -107,7 +107,7 @@
     position: absolute;
     top: -1.3em;
     right: 0;
-    font-size: 12px;
+    font-size: 0.86em;
     color: var(--text-faint);
     opacity: 0;
     transition: opacity 0.12s;

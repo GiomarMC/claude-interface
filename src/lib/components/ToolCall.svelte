@@ -231,7 +231,7 @@
   }
   .diff {
     margin: 0.2em 0 0 6ch;
-    font-size: 13px;
+    font-size: 0.93em;
     border-radius: 4px;
     overflow-x: auto;
   }

@@ -263,7 +263,7 @@
     padding: 0.6em 2ch;
   }
   .diff {
-    font-size: 13px;
+    font-size: 0.93em;
     margin-top: 0.3em;
   }
   .dl {
@@ -316,6 +316,6 @@
     font: inherit;
   }
   .hint {
-    font-size: 12px;
+    font-size: 0.86em;
   }
 </style>

@@ -9,6 +9,7 @@
   import { writeText } from "@tauri-apps/plugin-clipboard-manager";
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { Session, type Attachment } from "$lib/session.svelte";
+  import { prefs, TERMINALS, THEMES } from "$lib/prefs.svelte";
   import { modelName, shortPath } from "$lib/format";
   import Message from "$lib/components/Message.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
@@ -29,7 +30,7 @@
   onMount(() => {
     let unlistenDrop: (() => void) | undefined;
     (async () => {
-      await s.init();
+      await Promise.all([s.init(), prefs.load()]);
       s.home = (await homeDir()).replace(/\/$/, "");
       let last: string | null = null;
       try {
@@ -124,6 +125,47 @@
         case "model":
           if (arg) return s.setModel(arg.trim());
           return s.notice(`Modelo actual: ${modelName(s.model) || s.modelPref} · usa /model <opus|sonnet|haiku|id>`);
+        case "font": {
+          const a = arg.trim();
+          if (!a) {
+            return s.notice(
+              `Fuente: ${prefs.fontFamily ?? "monoespaciada del sistema"} · ${prefs.fontSize}px${prefs.config.fontFamily || prefs.config.fontSize ? "" : prefs.terminal ? ` (de ${prefs.terminal.terminal})` : ""} · usa /font <familia>, /font <tamaño> o /font reset (también ctrl + / ctrl - / ctrl 0)`,
+            );
+          }
+          if (a === "reset") await prefs.set({ fontFamily: undefined, fontSize: undefined });
+          else if (/^\d+$/.test(a)) await prefs.set({ fontSize: Math.min(28, Math.max(9, Number(a))) });
+          else await prefs.set({ fontFamily: a.replace(/^["']|["']$/g, "") });
+          return s.notice(`Fuente: ${prefs.fontFamily ?? "monoespaciada del sistema"} · ${prefs.fontSize}px`);
+        }
+        case "terminal": {
+          const a = arg.trim();
+          if (!a) {
+            const found = await invoke<string[]>("detected_terminals");
+            const t = prefs.terminal;
+            const now = t ? `${t.terminal}${t.profile ? ` (${t.profile})` : ""}${t.fontFamily ? ` · ${t.fontFamily} ${t.fontSize ?? ""}pt` : ""}` : "ninguno";
+            return s.notice(
+              `Estilo de terminal: ${now} · modo ${prefs.config.terminal ?? "auto"}\nDetectadas: ${found.join(", ") || "ninguna"}\nUsa /terminal <auto|off|${TERMINALS.join("|")}>`,
+            );
+          }
+          if (a !== "auto" && a !== "off" && !TERMINALS.includes(a as any)) return s.notice(`Terminal desconocida: ${a}`, "error");
+          await prefs.set({ terminal: a === "auto" ? undefined : a });
+          if (a !== "off" && !prefs.terminal) return s.notice(`No encontré configuración de ${a}`, "warn");
+          return s.notice(prefs.terminal ? `Estilo de ${prefs.terminal.terminal}${prefs.terminal.profile ? ` (${prefs.terminal.profile})` : ""}` : "Estilo de terminal desactivado");
+        }
+        case "theme": {
+          const a = arg.trim();
+          if (!a) {
+            const origin = prefs.config.theme ? "elegido en la app" : "de Claude Code";
+            return s.notice(`Tema: ${prefs.theme} (${origin}) · usa /theme <${THEMES.join("|")}|claude>`);
+          }
+          if (a === "claude") {
+            await prefs.set({ theme: undefined });
+            return s.notice(`Tema: ${prefs.theme} (sigue a Claude Code)`);
+          }
+          if (!THEMES.includes(a as any)) return s.notice(`Tema desconocido: ${a}`, "error");
+          await prefs.set({ theme: a });
+          return s.notice(`Tema: ${prefs.theme}`);
+        }
         case "effort":
           if (arg) return s.setEffort(arg.trim());
           return s.notice(`Esfuerzo actual: ${s.effort || "por defecto"} · usa /effort <low|medium|high|xhigh|max>`);
@@ -178,6 +220,15 @@
     else if (e.ctrlKey && e.key.toLowerCase() === "o") {
       e.preventDefault();
       pickFiles();
+    } else if (e.ctrlKey && (e.key === "=" || e.key === "+")) {
+      e.preventDefault();
+      prefs.zoom(1);
+    } else if (e.ctrlKey && e.key === "-") {
+      e.preventDefault();
+      prefs.zoom(-1);
+    } else if (e.ctrlKey && e.key === "0") {
+      e.preventDefault();
+      prefs.zoom(0);
     } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "e") {
       e.preventDefault();
       exportMd();
@@ -206,7 +257,7 @@
             <div class="claude">Atajos</div>
             <div><span class="k">arrastra</span> o <span class="k">ctrl+o</span> adjunta archivos · <span class="k">ctrl+v</span> pega imágenes</div>
             <div><span class="k">/resume</span> retomar · <span class="k">/export</span> a .md · <span class="k">/cd</span> cambiar carpeta</div>
-            <div><span class="k">!cmd</span> ejecuta en shell local (sin tokens)</div>
+            <div><span class="k">!cmd</span> ejecuta en shell local (sin tokens) · <span class="k">/font</span> <span class="k">/theme</span> <span class="k">/terminal</span> <span class="k">ctrl ±</span> tamaño</div>
           </div>
         </div>
       </header>
@@ -347,7 +398,7 @@
     flex: 1;
     border-left: 1px solid var(--claude);
     padding-left: 2ch;
-    font-size: 13px;
+    font-size: 0.93em;
     color: var(--text-dim);
     min-width: 30ch;
   }
@@ -369,12 +420,12 @@
   .stderr pre {
     white-space: pre-wrap;
     font-family: var(--font);
-    font-size: 12px;
+    font-size: 0.86em;
   }
   .drop {
     position: absolute;
     inset: 0;
-    background: rgba(20, 20, 19, 0.85);
+    background: color-mix(in srgb, var(--bg) 85%, transparent);
     display: grid;
     place-items: center;
     pointer-events: none;

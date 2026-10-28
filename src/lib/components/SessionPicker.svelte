@@ -104,10 +104,10 @@
   }
   .meta {
     flex: none;
-    font-size: 12px;
+    font-size: 0.86em;
   }
   .hint {
-    font-size: 12px;
+    font-size: 0.86em;
     margin-top: 0.4em;
   }
 </style>

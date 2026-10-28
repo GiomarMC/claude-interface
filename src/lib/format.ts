@@ -1,4 +1,4 @@
-// Mismos formatos que statusline-command.sh
+// Formatos numéricos y de tiempo de la interfaz
 
 export function fmtNum(n?: number): string {
   if (n == null) return "";
@@ -43,10 +43,9 @@ export function fmtBytes(n: number): string {
 }
 
 export function barColor(pct: number): string {
-  if (pct < 50) return "var(--sl-green)";
-  if (pct < 70) return "var(--sl-cyan)";
-  if (pct < 85) return "var(--sl-amber)";
-  return "var(--sl-red)";
+  if (pct < 70) return "var(--success)";
+  if (pct < 85) return "var(--warning)";
+  return "var(--error)";
 }
 
 /** "claude-opus-5-5" → "Opus 5.5" */

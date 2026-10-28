@@ -1,9 +1,11 @@
-/* Paleta del tema oscuro de Claude Code + colores ANSI-256 del statusline. */
+/* Temas de Claude Code (/theme). El activo se elige en prefs.svelte.ts
+   según ~/.claude.json o la preferencia guardada en la app. */
 :root {
   --bg: #141413;
   --bg-raised: #1c1c1b;
   --bg-user: #262624;
   --bg-hover: #2a2a28;
+  --scroll-thumb: #333331;
   --text: #ececec;
   --text-dim: #999999;
   --text-faint: #6b6b6b;
@@ -25,24 +27,112 @@
   --diff-del: #7a2936;
   --diff-del-text: #f3b8c1;
 
-  /* statusline-command.sh: 38;5;N */
-  --sl-green: #5fff00;   /* 82  */
-  --sl-cyan: #00ffff;    /* 51  */
-  --sl-amber: #ffd700;   /* 220 */
-  --sl-red: #ff0000;     /* 196 */
-  --sl-white: #eeeeee;   /* 255 */
-  --sl-dim: #626262;     /* 241 */
-  --sl-mauve: #af5fff;   /* 135 */
-  --sl-teal: #5fafff;    /* 75  */
+  --hl-keyword: #c678dd;
+  --hl-string: #98c379;
+  --hl-number: #d19a66;
+  --hl-comment: #6b6b6b;
+  --hl-title: #61afef;
+  --hl-type: #e5c07b;
+  --hl-variable: #e06c75;
+  --hl-meta: #56b6c2;
 
-  --font: "MesloLGS Nerd Font Mono", "MesloLGS Nerd Font", "MesloLGS NF",
-    "JetBrains Mono", "Cascadia Code", "Fira Code", "DejaVu Sans Mono", Menlo,
-    Consolas, "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", monospace;
+  --font-fallback: ui-monospace, "SF Mono", Menlo, "Cascadia Mono", Consolas,
+    "DejaVu Sans Mono", "Liberation Mono", "Noto Color Emoji", "Apple Color Emoji",
+    "Segoe UI Emoji", monospace;
+  --font: var(--font-fallback);
   --font-size: 14px;
   --line: 1.45;
   --gutter: 2ch;
 
   color-scheme: dark;
+}
+
+:root[data-theme="dark-daltonized"] {
+  --success: #3399ff;
+  --error: #ff6666;
+  --diff-add: #004466;
+  --diff-add-text: #cce6ff;
+  --diff-del: #660000;
+  --diff-del-text: #ffcccc;
+}
+
+:root[data-theme="dark-ansi"] {
+  --bg: #000000;
+  --bg-raised: #0c0c0c;
+  --bg-user: #1a1a1a;
+  --claude: #f14c4c;
+  --claude-shimmer: #ff8080;
+  --success: #23d18b;
+  --error: #cd3131;
+  --warning: #e5e510;
+  --suggestion: #3b8eea;
+  --permission: #3b8eea;
+  --plan: #29b8db;
+  --auto-accept: #d670d6;
+  --bash: #d670d6;
+  --diff-add: #0dbc79;
+  --diff-add-text: #000000;
+  --diff-del: #cd3131;
+  --diff-del-text: #ffffff;
+}
+
+:root[data-theme^="light"] {
+  --bg: #fafaf7;
+  --bg-raised: #f0efea;
+  --bg-user: #ecebe6;
+  --bg-hover: #e4e2db;
+  --scroll-thumb: #cfcdc5;
+  --text: #1f1f1e;
+  --text-dim: #666666;
+  --text-faint: #999999;
+
+  --claude: #d77757;
+  --claude-shimmer: #f5a586;
+  --border: #999999;
+  --border-faint: #d6d4cc;
+  --success: #2c7a39;
+  --error: #ab2b3f;
+  --warning: #966c1e;
+  --suggestion: #5769f7;
+  --permission: #5769f7;
+  --plan: #006666;
+  --auto-accept: #8700ff;
+  --bash: #ff0087;
+  --diff-add: #c7ecce;
+  --diff-add-text: #1f1f1e;
+  --diff-del: #f9d0d6;
+  --diff-del-text: #1f1f1e;
+
+  --hl-keyword: #a626a4;
+  --hl-string: #50a14f;
+  --hl-number: #986801;
+  --hl-comment: #a0a1a7;
+  --hl-title: #4078f2;
+  --hl-type: #c18401;
+  --hl-variable: #e45649;
+  --hl-meta: #0184bc;
+
+  color-scheme: light;
+}
+
+:root[data-theme="light-daltonized"] {
+  --success: #006699;
+  --error: #cc0000;
+  --diff-add: #99ccff;
+  --diff-del: #ffcccc;
+}
+
+:root[data-theme="light-ansi"] {
+  --bg: #ffffff;
+  --claude: #cd3131;
+  --success: #0dbc79;
+  --error: #cd3131;
+  --warning: #949800;
+  --suggestion: #2472c8;
+  --permission: #2472c8;
+  --plan: #11a8cd;
+  --auto-accept: #bc3fbc;
+  --bash: #bc3fbc;
 }
 
 * {
@@ -74,12 +164,12 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #333331;
+  background: var(--scroll-thumb);
   border: 3px solid var(--bg);
   border-radius: 6px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #4a4a47;
+  background: var(--text-faint);
 }
 
 button {
@@ -150,7 +240,7 @@ button {
   color: var(--suggestion);
 }
 .md strong {
-  color: #fff;
+  color: var(--text);
 }
 .md em {
   color: var(--text);
@@ -205,7 +295,7 @@ button {
   position: absolute;
   top: 0.4em;
   right: 0.6em;
-  font-size: 12px;
+  font-size: 0.86em;
   color: var(--text-faint);
   background: var(--bg-raised);
   padding: 0 0.6ch;
@@ -220,45 +310,45 @@ button {
   color: var(--claude);
 }
 
-/* ── highlight.js con colores ANSI ─────────────────────────────── */
+/* ── highlight.js con los colores del tema ───────────────────── */
 .hljs-keyword,
 .hljs-selector-tag,
 .hljs-built_in {
-  color: #c678dd;
+  color: var(--hl-keyword);
 }
 .hljs-string,
 .hljs-attr-value,
 .hljs-template-string {
-  color: #98c379;
+  color: var(--hl-string);
 }
 .hljs-number,
 .hljs-literal {
-  color: #d19a66;
+  color: var(--hl-number);
 }
 .hljs-comment,
 .hljs-quote {
-  color: #6b6b6b;
+  color: var(--hl-comment);
   font-style: italic;
 }
 .hljs-title,
 .hljs-title.function_,
 .hljs-section {
-  color: #61afef;
+  color: var(--hl-title);
 }
 .hljs-type,
 .hljs-title.class_,
 .hljs-attr,
 .hljs-attribute {
-  color: #e5c07b;
+  color: var(--hl-type);
 }
 .hljs-variable,
 .hljs-params,
 .hljs-property {
-  color: #e06c75;
+  color: var(--hl-variable);
 }
 .hljs-meta,
 .hljs-symbol {
-  color: #56b6c2;
+  color: var(--hl-meta);
 }
 .hljs-addition {
   color: var(--diff-add-text);
