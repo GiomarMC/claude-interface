@@ -53,6 +53,9 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Firma de las actualizaciones (clave generada con `tauri signer generate`)
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
           releaseName: "Claude Interface v__VERSION__"
@@ -62,6 +65,9 @@ jobs:
             - **Linux:** `.rpm` (Fedora), `.deb` (Ubuntu/Debian) o `.AppImage`
             - **Windows:** `.msi` o `-setup.exe`
             - **macOS:** `aarch64.dmg` (Apple Silicon) o `x64.dmg` (Intel). La app no está firmada: tras copiarla a Aplicaciones ejecuta `xattr -cr "/Applications/Claude Interface.app"`.
-          releaseDraft: true
+
+            Las versiones instaladas se actualizan desde la propia app.
+          # Publicado directamente: el updater solo ve el último release publicado.
+          releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
