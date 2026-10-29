@@ -37,21 +37,28 @@ struct EventPayload {
     line: String,
 }
 
+const CLAUDE_EXE: &str = if cfg!(windows) { "claude.exe" } else { "claude" };
+
 /// Desktop launchers often start apps with a minimal PATH, so look in the
 /// usual install locations as well.
 fn find_claude() -> PathBuf {
-    let exe = if cfg!(windows) { "claude.exe" } else { "claude" };
+    find_claude_installed().unwrap_or_else(|| PathBuf::from(CLAUDE_EXE))
+}
+
+/// Ruta de `claude` si está instalado (None si no se encuentra).
+pub fn find_claude_installed() -> Option<PathBuf> {
+    let exe = CLAUDE_EXE;
     if let Some(path) = std::env::var_os("PATH") {
         for dir in std::env::split_paths(&path) {
             let candidate = dir.join(exe);
             if candidate.is_file() {
-                return candidate;
+                return Some(candidate);
             }
             #[cfg(windows)]
             {
                 let cmd = dir.join("claude.cmd");
                 if cmd.is_file() {
-                    return cmd;
+                    return Some(cmd);
                 }
             }
         }
@@ -66,11 +73,23 @@ fn find_claude() -> PathBuf {
         ] {
             let candidate = home.join(rel).join(exe);
             if candidate.is_file() {
-                return candidate;
+                return Some(candidate);
             }
         }
     }
-    PathBuf::from(exe)
+    None
+}
+
+/// `Command` para claude sin abrir una consola en Windows.
+pub fn claude_command(path: &std::path::Path) -> Command {
+    #[allow(unused_mut)]
+    let mut cmd = Command::new(path);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    cmd
 }
 
 pub fn home_dir() -> Option<PathBuf> {
@@ -168,14 +187,7 @@ pub fn start_session(
 /// `claude --version` → "2.1.312"
 #[tauri::command]
 pub async fn claude_version() -> Option<String> {
-    let mut cmd = Command::new(find_claude());
-    cmd.arg("--version");
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000);
-    }
-    let out = cmd.output().ok()?;
+    let out = claude_command(&find_claude()).arg("--version").output().ok()?;
     let text = String::from_utf8_lossy(&out.stdout);
     text.split_whitespace().next().map(String::from)
 }

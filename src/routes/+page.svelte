@@ -13,6 +13,7 @@
   import { prefs, TERMINALS, THEMES } from "$lib/prefs.svelte";
   import { updater, RESUME_KEY } from "$lib/updater.svelte";
   import UpdateBanner from "$lib/components/UpdateBanner.svelte";
+  import Setup, { type ClaudeStatus } from "$lib/components/Setup.svelte";
   import { modelName, shortPath } from "$lib/format";
   import Message from "$lib/components/Message.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
@@ -24,9 +25,12 @@
   let attachments = $state<Attachment[]>([]);
   let dragging = $state(false);
   let picker = $state(false);
-  let scroller: HTMLDivElement;
-  let composer: ReturnType<typeof Composer>;
+  let scroller = $state<HTMLDivElement>();
+  let composer = $state<ReturnType<typeof Composer>>();
   let stick = true;
+  /** Estado de Claude Code si hace falta el asistente de primer arranque. */
+  let setup = $state<ClaudeStatus | null>(null);
+  let setupDone: (() => void) | undefined;
   let appVersion = $state("");
   getVersion().then((v) => (appVersion = v));
 
@@ -37,6 +41,13 @@
     (async () => {
       await Promise.all([s.init(), prefs.load()]);
       s.home = (await homeDir()).replace(/\/$/, "");
+
+      // Sin Claude Code instalado o sin sesión iniciada, primero el asistente.
+      const status = await invoke<ClaudeStatus>("claude_status");
+      if (!status.installed || status.loggedIn === false) {
+        setup = status;
+        await new Promise<void>((resolve) => (setupDone = resolve));
+      }
       let last: string | null = null;
       try {
         last = localStorage.getItem(CWD_KEY);
@@ -208,12 +219,14 @@
   }
 
   function scrollToEnd(force = false) {
-    if (!scroller || (!force && !stick)) return;
-    requestAnimationFrame(() => (scroller.scrollTop = scroller.scrollHeight));
+    const el = scroller;
+    if (!el || (!force && !stick)) return;
+    requestAnimationFrame(() => (el.scrollTop = el.scrollHeight));
   }
 
   function onScroll() {
-    stick = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80;
+    const el = scroller;
+    if (el) stick = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   }
 
   $effect(() => {
@@ -266,6 +279,18 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
 <main onclick={onClick}>
+  {#if setup}
+    <div class="scroll">
+      <Setup
+        status={setup}
+        onready={(st) => {
+          if (st.version) s.version = st.version;
+          setup = null;
+          setupDone?.();
+        }}
+      />
+    </div>
+  {:else}
   <div class="scroll" bind:this={scroller} onscroll={onScroll}>
     <div class="transcript">
       <header class="welcome">
@@ -346,6 +371,7 @@
       />
     </div>
   </div>
+  {/if}
 
   {#if dragging}
     <div class="drop">

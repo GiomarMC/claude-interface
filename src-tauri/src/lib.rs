@@ -1,5 +1,6 @@
 mod claude;
 mod files;
+mod setup;
 mod terminal;
 mod updates;
 
@@ -14,6 +15,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(claude::Sessions(Mutex::new(Default::default())))
+        .manage(setup::SetupTask(Mutex::new(None)))
         .invoke_handler(tauri::generate_handler![
             claude::start_session,
             claude::send_line,
@@ -34,6 +36,11 @@ pub fn run() {
             terminal::terminal_style,
             terminal::detected_terminals,
             updates::install_kind,
+            setup::claude_status,
+            setup::install_claude,
+            setup::login_claude,
+            setup::setup_input,
+            setup::setup_cancel,
             updates::install_linux_package,
         ])
         .run(tauri::generate_context!())
