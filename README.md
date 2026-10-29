@@ -11,6 +11,10 @@ Interfaz de escritorio para [Claude Code](https://docs.claude.com/en/docs/claude
 [![Build](https://img.shields.io/github/actions/workflow/status/GiomarMC/claude-interface/release.yml?label=build)](https://github.com/GiomarMC/claude-interface/actions/workflows/release.yml)
 ![Plataformas](https://img.shields.io/badge/plataformas-Linux%20%7C%20Windows%20%7C%20macOS-b1b9f9)
 
+<br />
+
+<img src="docs/screenshots/conversation.png" width="900" alt="Claude Interface corrigiendo un bug con un archivo y una captura adjuntos" />
+
 </div>
 
 ## Descargar
@@ -58,6 +62,24 @@ Al abrir (y cada 6 horas) la app busca una versión nueva y muestra un aviso par
 
 Las actualizaciones van firmadas y la app verifica la firma antes de instalarlas.
 
+## Casos de uso
+
+### Arreglar un bug pasándole el archivo y la captura del error
+
+Arrastras `orders.ts` y la captura del error a la ventana. El contenido del archivo va directo en el mensaje, así que Claude no gasta llamadas en buscarlo ni leerlo: identifica el fallo en la imagen, edita el código (con el diff en verde y rojo, como en la TUI), escribe el test y lo ejecuta. Todo con tu statusline y el modo *accept edits* activos (captura de arriba).
+
+### Aprobar acciones con el mismo diálogo de permisos
+
+Cuando Claude quiere ejecutar algo que requiere permiso, como un `git push`, aparece el diálogo de la TUI: aceptas una vez, aceptas para siempre en este proyecto o le dices qué hacer distinto. Se maneja con el teclado (`1`/`2`/`3`, `↑`/`↓`, `Esc`) o con el ratón.
+
+<p align="center"><img src="docs/screenshots/permission.png" width="900" alt="Diálogo de permisos para un comando git push" /></p>
+
+### Adjuntar de todo y usar tus comandos
+
+Imágenes (con miniatura), PDF y carpetas se adjuntan arrastrándolos, con `Ctrl+O` o pegándolos; cada uno se envía de la forma que menos tokens gasta. Al escribir `/` aparecen tus comandos y skills de Claude Code junto con los de la app.
+
+<p align="center"><img src="docs/screenshots/start.png" width="900" alt="Adjuntos y menú de comandos" /></p>
+
 ## ¿Qué es?
 
 No reemplaza a Claude Code: lanza tu `claude` instalado en modo `stream-json`, así que usa tu cuenta, tu `settings.json`, tus skills, MCP, `CLAUDE.md` y tus sesiones. Se puede abrir en un directorio concreto: `claude-interface ~/mi-proyecto`.
@@ -96,6 +118,8 @@ Para publicar una versión, sube la versión en `package.json`, `src-tauri/Cargo
 ```sh
 git tag v0.1.3 && git push origin v0.1.3
 ```
+
+Las capturas del README se generan con datos de ejemplo desde la ruta de demo, que solo existe en desarrollo y simula Claude Code con los mocks de Tauri: con `pnpm dev` abierto, visita `http://localhost:1420/demo?scene=conversation` (o `permission`, `start`).
 
 El workflow necesita los secrets `TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` con la clave de firma del updater. Para generar instaladores en local con `pnpm tauri build` exporta esas mismas variables (o `TAURI_SIGNING_PRIVATE_KEY` con la ruta a la clave).
 
