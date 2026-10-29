@@ -48,42 +48,50 @@ fn find_claude() -> PathBuf {
 /// Ruta de `claude` si está instalado (None si no se encuentra).
 pub fn find_claude_installed() -> Option<PathBuf> {
     let exe = CLAUDE_EXE;
-    if let Some(path) = std::env::var_os("PATH") {
-        for dir in std::env::split_paths(&path) {
-            let candidate = dir.join(exe);
-            if candidate.is_file() {
-                return Some(candidate);
-            }
-            #[cfg(windows)]
-            {
-                let cmd = dir.join("claude.cmd");
-                if cmd.is_file() {
-                    return Some(cmd);
-                }
+    for dir in std::env::split_paths(crate::shell_env::path()) {
+        let candidate = dir.join(exe);
+        if candidate.is_file() {
+            return Some(candidate);
+        }
+        #[cfg(windows)]
+        {
+            let cmd = dir.join("claude.cmd");
+            if cmd.is_file() {
+                return Some(cmd);
             }
         }
     }
+    // Respaldo por si no se pudo leer el PATH del shell (ver shell_env.rs).
+    let mut dirs: Vec<PathBuf> = ["/opt/homebrew/bin", "/usr/local/bin", "/snap/bin"]
+        .into_iter()
+        .map(PathBuf::from)
+        .collect();
     if let Some(home) = home_dir() {
         for rel in [
             ".local/bin",
             ".claude/local",
             ".npm-global/bin",
             ".bun/bin",
+            ".volta/bin",
+            ".yarn/bin",
+            ".local/share/pnpm",
+            "Library/pnpm",
             "AppData/Roaming/npm",
         ] {
-            let candidate = home.join(rel).join(exe);
-            if candidate.is_file() {
-                return Some(candidate);
-            }
+            dirs.push(home.join(rel));
+        }
+        // nvm: ~/.nvm/versions/node/<versión>/bin
+        if let Ok(versions) = std::fs::read_dir(home.join(".nvm/versions/node")) {
+            dirs.extend(versions.flatten().map(|v| v.path().join("bin")));
         }
     }
-    None
+    dirs.into_iter().map(|d| d.join(exe)).find(|c| c.is_file())
 }
 
 /// `Command` para claude sin abrir una consola en Windows.
 pub fn claude_command(path: &std::path::Path) -> Command {
     #[allow(unused_mut)]
-    let mut cmd = Command::new(path);
+    let mut cmd = crate::shell_env::command(path);
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -106,7 +114,7 @@ pub fn start_session(
 ) -> Result<(), String> {
     stop(&state, &opts.key);
 
-    let mut cmd = Command::new(find_claude());
+    let mut cmd = crate::shell_env::command(find_claude());
     cmd.args([
         "-p",
         "--input-format",

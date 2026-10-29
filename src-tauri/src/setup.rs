@@ -149,7 +149,7 @@ fn spawn_task(app: AppHandle, task: &State<SetupTask>, mut cmd: Command) -> Resu
 #[tauri::command]
 pub fn install_claude(app: AppHandle, task: State<SetupTask>) -> Result<(), String> {
     let cmd = if cfg!(windows) {
-        let mut c = Command::new("powershell");
+        let mut c = crate::shell_env::command("powershell");
         c.args([
             "-NoProfile",
             "-ExecutionPolicy",
@@ -159,7 +159,7 @@ pub fn install_claude(app: AppHandle, task: State<SetupTask>) -> Result<(), Stri
         ]);
         c
     } else {
-        let mut c = Command::new("/bin/bash");
+        let mut c = crate::shell_env::command("/bin/bash");
         c.args(["-c", "curl -fsSL https://claude.ai/install.sh | bash"]);
         c
     };

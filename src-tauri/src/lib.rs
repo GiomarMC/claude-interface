@@ -1,6 +1,7 @@
 mod claude;
 mod files;
 mod setup;
+mod shell_env;
 mod terminal;
 mod updates;
 
@@ -8,6 +9,7 @@ use std::sync::Mutex;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    shell_env::warm_up();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())

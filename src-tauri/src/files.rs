@@ -142,7 +142,7 @@ fn git_binary() -> Option<&'static str> {
 }
 
 fn git(cwd: &str, args: &[&str]) -> Option<String> {
-    let out = Command::new(git_binary()?)
+    let out = crate::shell_env::command(git_binary()?)
         .arg("-C")
         .arg(cwd)
         .arg("--no-optional-locks")
@@ -349,12 +349,12 @@ pub fn claude_theme() -> Option<String> {
 
 fn shell_command(command: &str) -> Command {
     if cfg!(windows) {
-        let mut c = Command::new("cmd");
+        let mut c = crate::shell_env::command("cmd");
         c.args(["/C", command]);
         c
     } else {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/sh".into());
-        let mut c = Command::new(shell);
+        let mut c = crate::shell_env::command(shell);
         c.args(["-c", command]);
         c
     }
