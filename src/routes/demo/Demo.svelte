@@ -21,6 +21,19 @@
     { name: "security-review", description: "Revisión de seguridad de los cambios pendientes" },
   ];
 
+  // Escena "setup": Claude Code sin instalar → instalar → iniciar sesión.
+  let claude = scene === "setup"
+    ? { installed: false, loggedIn: null as boolean | null, version: null as string | null }
+    : { installed: true, loggedIn: true, version: "2.1.312" };
+
+  async function stream(chunks: string[], exit: number | null) {
+    for (const c of chunks) {
+      await sleep(120);
+      await emit("setup-output", c);
+    }
+    if (exit !== null) await emit("setup-exit", exit);
+  }
+
   const ATTACHMENTS: Record<string, unknown> = {
     [`${CWD}/src/routes/orders.ts`]: { kind: "text", mime: "text/plain", size: 4310, data: ORDERS_TS },
     "/home/dev/Imágenes/error-500.png": { kind: "image", mime: "image/png", size: 182_000, data: PNG },
@@ -52,6 +65,29 @@
             return null;
           case "install_kind":
             return "dev";
+          case "claude_status":
+            return claude;
+          case "install_claude":
+            stream(
+              [
+                "Setting up Claude Code...\n",
+                "✔ Claude Code successfully installed!\n  Version: 2.1.312\n  Location: ~/.local/bin/claude\n",
+                "\n✅ Installation complete!\n",
+              ],
+              0,
+            );
+            claude = { installed: true, loggedIn: false, version: "2.1.312" };
+            return null;
+          case "login_claude":
+            stream(
+              [
+                "Opening browser to sign in…\n",
+                "If the browser didn't open, visit: https://claude.com/cai/oauth/authorize?code=true&client_id=…\n",
+                "Paste code here if prompted > ",
+              ],
+              null,
+            );
+            return null;
           case "git_info":
             return { repo: "tienda-api", branch: "fix/carrito-vacio", insertions: 11, deletions: 1 };
           case "run_statusline":
@@ -119,6 +155,18 @@
   }
 
   onMount(async () => {
+    if (scene === "setup") {
+      const click = async (text: string) => {
+        const btn = await waitFor(() =>
+          [...document.querySelectorAll("button")].find((b) => b.textContent?.includes(text)),
+        );
+        btn.click();
+      };
+      await click("Instalar Claude Code");
+      await click("Cuenta de Claude");
+      return;
+    }
+
     await waitFor(() => document.querySelector("textarea"));
     await sleep(400);
 

@@ -24,15 +24,16 @@ Enlaces directos a la última versión:
 | Sistema | Arquitectura | Descarga | Notas |
 |---|---|---|---|
 | 🪟 **Windows** 10/11 | x64 | [**Instalador `.exe`**](https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-windows-x64-setup.exe) · [`.msi`](https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-windows-x64.msi) | Recomendado el `.exe` |
-| 🍎 **macOS** Apple Silicon (M1–M4) | arm64 | [**`.dmg`**](https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-macos-arm64.dmg) | [Ver nota](#macos) |
-| 🍎 **macOS** Intel | x64 | [**`.dmg`**](https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-macos-x64.dmg) | [Ver nota](#macos) |
+| 🍎 **macOS** 11+ | Apple Silicon e Intel | [**`.dmg` universal**](https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-macos-universal.dmg) | [Ver nota](#macos) |
 | 🐧 **Fedora / RHEL / openSUSE** | x86_64 | [**`.rpm`**](https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-linux-x86_64.rpm) | |
 | 🐧 **Ubuntu / Debian / Mint** | x86_64 | [**`.deb`**](https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-linux-x86_64.deb) | |
 | 🐧 **Cualquier Linux** | x86_64 | [**`.AppImage`**](https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-linux-x86_64.AppImage) | Sin instalar: `chmod +x` y ejecutar |
 
 Versiones anteriores y notas de cada versión en [Releases](https://github.com/GiomarMC/claude-interface/releases).
 
-**Requisito:** tener [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) instalado y con la sesión iniciada (`claude` en el PATH o en `~/.local/bin`). La app usa tu propia instalación y tu cuenta.
+**No necesitas instalar nada más.** La app funciona sobre [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) con tu propia cuenta: si al abrirla no lo encuentra, lo instala con el instalador oficial de Anthropic (solo para tu usuario, sin permisos de administrador) y te guía para iniciar sesión, sin abrir la terminal. Si ya lo tienes, usa tu instalación y tu sesión tal cual.
+
+<p align="center"><img src="docs/screenshots/setup.png" width="760" alt="Asistente de primer arranque: instalar Claude Code e iniciar sesión" /></p>
 
 ### Instalación desde la terminal (Linux)
 

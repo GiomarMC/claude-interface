@@ -9,7 +9,6 @@ set -euo pipefail
 URL="${URL:-http://127.0.0.1:1420/demo}"
 OUT="$(cd "$(dirname "$0")/.." && pwd)/docs/screenshots"
 SCALE=1.5
-TITLE="Claude · tienda-api"
 CHROME="$(command -v google-chrome || command -v chromium || command -v chromium-browser)"
 
 tmp="$(mktemp -d)"
@@ -17,10 +16,10 @@ trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$OUT"
 
 # escena:ancho,alto (px CSS del contenido de la ventana)
-SCENES=(conversation:1280,1110 permission:1280,960 start:1280,640)
+SCENES=(conversation:1280,1110 permission:1280,960 start:1280,640 setup:1280,640)
 
 frame() {
-  local shot="$1" out="$2"
+  local shot="$1" out="$2" title="$3"
   local w h bar=54 r=18
   w=$(magick identify -format %w "$shot")
   h=$(magick identify -format %h "$shot")
@@ -31,7 +30,7 @@ frame() {
     -fill '#febc2e' -draw "circle 63,27 72,27" \
     -fill '#28c840' -draw "circle 93,27 102,27" \
     -fill '#3a3a3a' -draw "line 0,$((bar - 1)) $w,$((bar - 1))" \
-    -font Noto-Sans-Medium -pointsize 20 -fill '#d4d4d4' -gravity center -annotate +0+0 "$TITLE" \
+    -font Noto-Sans-Medium -pointsize 20 -fill '#d4d4d4' -gravity center -annotate +0+0 "$title" \
     "$tmp/bar.png"
   magick "$tmp/bar.png" "$shot" -append "$tmp/win.png"
 
@@ -54,6 +53,9 @@ for sc in "${SCENES[@]}"; do
   "$CHROME" --headless=new --user-data-dir="$tmp/profile" --hide-scrollbars \
     --window-size="$size" --force-device-scale-factor="$SCALE" --virtual-time-budget=15000 \
     --screenshot="$tmp/$name.png" "$URL?scene=$name" >/dev/null 2>&1
-  frame "$tmp/$name.png" "$OUT/$name.png"
+  # Título que pone la app: el del proyecto abierto, o el de la app en el asistente.
+  title="Claude · tienda-api"
+  [ "$name" = setup ] && title="Claude Interface"
+  frame "$tmp/$name.png" "$OUT/$name.png" "$title"
   echo "✓ $OUT/$name.png"
 done
