@@ -18,10 +18,10 @@ jobs:
             args: ""
           - platform: windows-latest
             args: ""
+          # Un único .dmg universal (Apple Silicon e Intel): así nadie baja
+          # el de la otra arquitectura y macOS no pide instalar Rosetta.
           - platform: macos-latest
-            args: "--target aarch64-apple-darwin"
-          - platform: macos-latest
-            args: "--target x86_64-apple-darwin"
+            args: "--target universal-apple-darwin"
     runs-on: ${{ matrix.platform }}
 
     steps:
@@ -64,7 +64,9 @@ jobs:
 
             - **Linux:** `.rpm` (Fedora), `.deb` (Ubuntu/Debian) o `.AppImage`
             - **Windows:** `.msi` o `-setup.exe`
-            - **macOS:** `aarch64.dmg` (Apple Silicon) o `x64.dmg` (Intel). La app no está firmada: tras copiarla a Aplicaciones ejecuta `xattr -cr "/Applications/Claude Interface.app"`.
+            - **macOS:** `universal.dmg` (Apple Silicon e Intel). La app no está firmada: tras copiarla a Aplicaciones ejecuta `xattr -cr "/Applications/Claude Interface.app"`.
+
+            Si Claude Code no está instalado o no has iniciado sesión, la app lo instala y te guía al abrirla.
 
             Las versiones instaladas se actualizan desde la propia app.
           # Publicado directamente: el updater solo ve el último release publicado.
@@ -87,12 +89,14 @@ jobs:
           set -euo pipefail
           mkdir dist && cd dist
           gh release download "$TAG" -R "$GITHUB_REPOSITORY" \
-            -p '*_x64-setup.exe' -p '*_x64_en-US.msi' -p '*_aarch64.dmg' -p '*_x64.dmg' \
+            -p '*_x64-setup.exe' -p '*_x64_en-US.msi' -p '*_universal.dmg' \
             -p '*_amd64.AppImage' -p '*_amd64.deb' -p '*.x86_64.rpm'
           mv *_x64-setup.exe   Claude-Interface-windows-x64-setup.exe
           mv *_x64_en-US.msi   Claude-Interface-windows-x64.msi
-          mv *_aarch64.dmg     Claude-Interface-macos-arm64.dmg
-          mv *_x64.dmg         Claude-Interface-macos-x64.dmg
+          mv *_universal.dmg   Claude-Interface-macos-universal.dmg
+          # Nombres anteriores, para que no se rompan enlaces ya compartidos.
+          cp Claude-Interface-macos-universal.dmg Claude-Interface-macos-arm64.dmg
+          cp Claude-Interface-macos-universal.dmg Claude-Interface-macos-x64.dmg
           mv *_amd64.AppImage  Claude-Interface-linux-x86_64.AppImage
           mv *_amd64.deb       Claude-Interface-linux-x86_64.deb
           mv *.x86_64.rpm      Claude-Interface-linux-x86_64.rpm
