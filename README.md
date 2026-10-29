@@ -1,8 +1,66 @@
+<div align="center">
+
+<img src="src-tauri/icons/128x128.png" width="96" alt="Claude Interface" />
+
 # Claude Interface
 
 Interfaz de escritorio para [Claude Code](https://docs.claude.com/en/docs/claude-code) con el look de la TUI, pero con la interacción de una app gráfica.
 
-No reemplaza a Claude Code: lanza tu `claude` instalado en modo `stream-json`, así que usa tu cuenta, tu `settings.json`, tus skills, MCP, `CLAUDE.md` y tus sesiones.
+[![Última versión](https://img.shields.io/github/v/release/GiomarMC/claude-interface?label=versi%C3%B3n&color=d77757)](https://github.com/GiomarMC/claude-interface/releases/latest)
+[![Descargas](https://img.shields.io/github/downloads/GiomarMC/claude-interface/total?label=descargas&color=4eba65)](https://github.com/GiomarMC/claude-interface/releases)
+[![Build](https://img.shields.io/github/actions/workflow/status/GiomarMC/claude-interface/release.yml?label=build)](https://github.com/GiomarMC/claude-interface/actions/workflows/release.yml)
+![Plataformas](https://img.shields.io/badge/plataformas-Linux%20%7C%20Windows%20%7C%20macOS-b1b9f9)
+
+</div>
+
+## Descargar
+
+Enlaces directos a la última versión:
+
+| Sistema | Arquitectura | Descarga | Notas |
+|---|---|---|---|
+| 🪟 **Windows** 10/11 | x64 | [**Instalador `.exe`**](https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-windows-x64-setup.exe) · [`.msi`](https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-windows-x64.msi) | Recomendado el `.exe` |
+| 🍎 **macOS** Apple Silicon (M1–M4) | arm64 | [**`.dmg`**](https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-macos-arm64.dmg) | [Ver nota](#macos) |
+| 🍎 **macOS** Intel | x64 | [**`.dmg`**](https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-macos-x64.dmg) | [Ver nota](#macos) |
+| 🐧 **Fedora / RHEL / openSUSE** | x86_64 | [**`.rpm`**](https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-linux-x86_64.rpm) | |
+| 🐧 **Ubuntu / Debian / Mint** | x86_64 | [**`.deb`**](https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-linux-x86_64.deb) | |
+| 🐧 **Cualquier Linux** | x86_64 | [**`.AppImage`**](https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-linux-x86_64.AppImage) | Sin instalar: `chmod +x` y ejecutar |
+
+Versiones anteriores y notas de cada versión en [Releases](https://github.com/GiomarMC/claude-interface/releases).
+
+**Requisito:** tener [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) instalado y con la sesión iniciada (`claude` en el PATH o en `~/.local/bin`). La app usa tu propia instalación y tu cuenta.
+
+### Instalación desde la terminal (Linux)
+
+```sh
+# Fedora / RHEL
+sudo dnf install https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-linux-x86_64.rpm
+
+# Ubuntu / Debian
+curl -fLo /tmp/claude-interface.deb https://github.com/GiomarMC/claude-interface/releases/latest/download/Claude-Interface-linux-x86_64.deb
+sudo apt install /tmp/claude-interface.deb
+```
+
+### macOS
+
+La app no está firmada con un certificado de Apple, así que la primera vez macOS dirá que "está dañada". Después de copiarla a Aplicaciones ejecuta una vez:
+
+```sh
+xattr -cr "/Applications/Claude Interface.app"
+```
+
+### Actualizaciones
+
+Al abrir (y cada 6 horas) la app busca una versión nueva y muestra un aviso para instalarla y reiniciar; la conversación abierta se retoma al volver. `/update` busca a mano y `/update off` desactiva la búsqueda automática.
+
+- **Windows, macOS y AppImage:** se descarga y se instala sola.
+- **.rpm / .deb:** descarga el paquete nuevo y lo instala con `pkexec` (pide tu contraseña en una ventana del sistema).
+
+Las actualizaciones van firmadas y la app verifica la firma antes de instalarlas.
+
+## ¿Qué es?
+
+No reemplaza a Claude Code: lanza tu `claude` instalado en modo `stream-json`, así que usa tu cuenta, tu `settings.json`, tus skills, MCP, `CLAUDE.md` y tus sesiones. Se puede abrir en un directorio concreto: `claude-interface ~/mi-proyecto`.
 
 ## Se adapta a cada usuario
 
@@ -23,40 +81,6 @@ No reemplaza a Claude Code: lanza tu `claude` instalado en modo `stream-json`, a
 - **Comandos `/`** con autocompletado de tus comandos y skills, más `/resume`, `/clear`, `/cd`, `/model`, `/effort`, `/copy`, `/font`, `/theme`, `/terminal`.
 - **`!comando`** ejecuta en tu shell local sin gastar tokens; la salida se adjunta como contexto al siguiente mensaje.
 
-## Requisitos
-
-- [Claude Code](https://docs.claude.com/en/docs/claude-code/setup) instalado y autenticado (`claude` en el PATH o en `~/.local/bin`).
-
-## Instalación
-
-Descarga el instalador de tu sistema desde [Releases](../../releases):
-
-| Sistema | Archivo |
-|---|---|
-| Fedora / RHEL | `.rpm` |
-| Ubuntu / Debian | `.deb` |
-| Cualquier Linux | `.AppImage` |
-| Windows | `.msi` o `-setup.exe` |
-| macOS Apple Silicon | `aarch64.dmg` |
-| macOS Intel | `x64.dmg` |
-
-En macOS la app no está firmada; después de copiarla a Aplicaciones ejecuta:
-
-```sh
-xattr -cr "/Applications/Claude Interface.app"
-```
-
-Se puede abrir en un directorio concreto: `claude-interface ~/mi-proyecto`.
-
-### Actualizaciones
-
-Al abrir (y cada 6 horas) la app busca una versión nueva y muestra un aviso para instalarla y reiniciar; la conversación abierta se retoma al volver. `/update` busca a mano y `/update off` desactiva la búsqueda automática.
-
-- **Windows, macOS y AppImage:** se descarga y se instala sola.
-- **.rpm / .deb:** descarga el paquete nuevo y lo instala con `pkexec` (pide tu contraseña en una ventana del sistema).
-
-Las actualizaciones van firmadas y la app verifica la firma antes de instalarlas.
-
 ## Desarrollo
 
 Requiere Node 22+, pnpm y Rust ([prerequisitos de Tauri](https://tauri.app/start/prerequisites/)).
@@ -67,10 +91,10 @@ pnpm tauri dev     # app en modo desarrollo
 pnpm tauri build   # instaladores para el sistema actual
 ```
 
-Para publicar una versión, sube la versión en `package.json`, `src-tauri/Cargo.toml` y `src-tauri/tauri.conf.json`, y un tag `v*`. GitHub Actions genera los instaladores de Linux, Windows y macOS y publica el release, que las apps instaladas detectan como actualización:
+Para publicar una versión, sube la versión en `package.json`, `src-tauri/Cargo.toml` y `src-tauri/tauri.conf.json`, y un tag `v*`. GitHub Actions genera los instaladores de Linux, Windows y macOS, publica el release (que las apps instaladas detectan como actualización) y sube copias con nombre fijo para los enlaces de descarga de este README:
 
 ```sh
-git tag v0.1.2 && git push origin v0.1.2
+git tag v0.1.3 && git push origin v0.1.3
 ```
 
 El workflow necesita los secrets `TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` con la clave de firma del updater. Para generar instaladores en local con `pnpm tauri build` exporta esas mismas variables (o `TAURI_SIGNING_PRIVATE_KEY` con la ruta a la clave).

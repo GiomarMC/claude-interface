@@ -71,3 +71,29 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+  # Copias con nombre fijo para que el README enlace siempre a la última
+  # versión vía releases/latest/download/<nombre>.
+  stable-names:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ github.ref_name }}
+    steps:
+      - name: Subir instaladores con nombre fijo
+        run: |
+          set -euo pipefail
+          mkdir dist && cd dist
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" \
+            -p '*_x64-setup.exe' -p '*_x64_en-US.msi' -p '*_aarch64.dmg' -p '*_x64.dmg' \
+            -p '*_amd64.AppImage' -p '*_amd64.deb' -p '*.x86_64.rpm'
+          mv *_x64-setup.exe   Claude-Interface-windows-x64-setup.exe
+          mv *_x64_en-US.msi   Claude-Interface-windows-x64.msi
+          mv *_aarch64.dmg     Claude-Interface-macos-arm64.dmg
+          mv *_x64.dmg         Claude-Interface-macos-x64.dmg
+          mv *_amd64.AppImage  Claude-Interface-linux-x86_64.AppImage
+          mv *_amd64.deb       Claude-Interface-linux-x86_64.deb
+          mv *.x86_64.rpm      Claude-Interface-linux-x86_64.rpm
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber Claude-Interface-*
