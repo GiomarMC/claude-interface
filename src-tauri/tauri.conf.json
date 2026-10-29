@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Claude Interface",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "identifier": "dev.giomarmc.claudeinterface",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -36,7 +36,19 @@
       "icons/icon.ico"
     ],
     "category": "DeveloperTool",
-    "shortDescription": "Interfaz de escritorio para Claude Code con estilo TUI"
+    "shortDescription": "Interfaz de escritorio para Claude Code con estilo TUI",
+    "createUpdaterArtifacts": true
   },
-  "mainBinaryName": "claude-interface"
+  "mainBinaryName": "claude-interface",
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEQ0Q0VBOUZFNTA1RjQ1ODMKUldTRFJWOVEvcW5PMUFTQWozVlB5bktvOENCcmtyUGEwYmRoOXpSSWJoMlFWM1NlYlpDK3JmVVAK",
+      "endpoints": [
+        "https://github.com/GiomarMC/claude-interface/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
+  }
 }

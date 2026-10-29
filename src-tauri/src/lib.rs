@@ -1,6 +1,7 @@
 mod claude;
 mod files;
 mod terminal;
+mod updates;
 
 use std::sync::Mutex;
 
@@ -10,6 +11,8 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_clipboard_manager::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(claude::Sessions(Mutex::new(Default::default())))
         .invoke_handler(tauri::generate_handler![
             claude::start_session,
@@ -30,6 +33,8 @@ pub fn run() {
             files::save_app_config,
             terminal::terminal_style,
             terminal::detected_terminals,
+            updates::install_kind,
+            updates::install_linux_package,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

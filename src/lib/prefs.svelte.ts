@@ -41,6 +41,8 @@ type Config = {
   theme?: string;
   /** "auto" (por defecto), "off" o el nombre de una terminal. */
   terminal?: string;
+  /** Buscar actualizaciones al abrir (por defecto sí). */
+  autoUpdate?: boolean;
 };
 
 // Roles de los temas *-ansi de Claude Code → índice en la paleta de la terminal.

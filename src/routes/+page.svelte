@@ -11,6 +11,8 @@
   import { openUrl } from "@tauri-apps/plugin-opener";
   import { Session, type Attachment } from "$lib/session.svelte";
   import { prefs, TERMINALS, THEMES } from "$lib/prefs.svelte";
+  import { updater, RESUME_KEY } from "$lib/updater.svelte";
+  import UpdateBanner from "$lib/components/UpdateBanner.svelte";
   import { modelName, shortPath } from "$lib/format";
   import Message from "$lib/components/Message.svelte";
   import Spinner from "$lib/components/Spinner.svelte";
@@ -39,8 +41,15 @@
       try {
         last = localStorage.getItem(CWD_KEY);
       } catch {}
-      const cwd = (await invoke<string | null>("initial_cwd")) ?? last ?? s.home;
-      await startIn(cwd);
+      // Tras instalar una actualización se retoma la conversación que estaba abierta.
+      let resume: { sessionId: string; cwd: string } | null = null;
+      try {
+        resume = JSON.parse(localStorage.getItem(RESUME_KEY) ?? "null");
+        localStorage.removeItem(RESUME_KEY);
+      } catch {}
+      if (resume) await startIn(resume.cwd, resume.sessionId);
+      else await startIn((await invoke<string | null>("initial_cwd")) ?? last ?? s.home);
+      updater.start(prefs.config.autoUpdate !== false);
 
       unlistenDrop = await getCurrentWebview().onDragDropEvent((e) => {
         const p = e.payload;
@@ -54,6 +63,7 @@
     })();
     return () => {
       unlistenDrop?.();
+      updater.stop();
       s.stop();
     };
   });
@@ -154,6 +164,19 @@
           await prefs.set({ terminal: a === "auto" ? undefined : a });
           if (a !== "off" && !prefs.terminal) return s.notice(`No encontré configuración de ${a}`, "warn");
           return s.notice(prefs.terminal ? `Estilo de ${prefs.terminal.terminal}${prefs.terminal.profile ? ` (${prefs.terminal.profile})` : ""}` : "Estilo de terminal desactivado");
+        }
+        case "update": {
+          const a = arg.trim();
+          if (a === "off" || a === "on") {
+            await prefs.set({ autoUpdate: a === "on" ? undefined : false });
+            await updater.start(a === "on");
+            return s.notice(a === "on" ? "Actualizaciones automáticas activadas" : "Actualizaciones automáticas desactivadas");
+          }
+          if (updater.kind === "dev") return s.notice("Build de desarrollo: las actualizaciones están desactivadas", "warn");
+          s.notice("Buscando actualizaciones…");
+          const found = await updater.check();
+          if (updater.status === "error") return s.notice(`No se pudo comprobar: ${updater.error}`, "error");
+          return s.notice(found ? `Nueva versión v${updater.version} disponible` : `Ya tienes la última versión (v${appVersion})`);
         }
         case "theme": {
           const a = arg.trim();
@@ -309,6 +332,9 @@
   </div>
 
   <div class="bottom">
+    <div class="transcript">
+      <UpdateBanner busy={s.busy} oninstall={() => updater.install(s.sessionId, s.cwd)} />
+    </div>
     <div class="transcript">
       <Composer
         bind:this={composer}

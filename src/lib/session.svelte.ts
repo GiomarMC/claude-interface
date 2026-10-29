@@ -60,6 +60,7 @@ const LOCAL_COMMANDS: SlashCommand[] = [
   { name: "effort", description: "Cambia el nivel de esfuerzo", argumentHint: "low|medium|high|xhigh|max", local: true },
   { name: "font", description: "Fuente y tamaño de la app", argumentHint: "<familia>|<tamaño>|reset", local: true },
   { name: "terminal", description: "Estilo de terminal a imitar (fondo, fuente, paleta)", argumentHint: "auto|off|konsole|kitty|…", local: true },
+  { name: "update", description: "Busca actualizaciones de la app", argumentHint: "[on|off]", local: true },
   { name: "theme", description: "Tema de la app (por defecto, el de Claude Code)", argumentHint: "dark|light|…|auto|claude", local: true },
 ];
 
