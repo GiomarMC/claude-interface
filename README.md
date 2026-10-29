@@ -116,10 +116,10 @@ pnpm tauri build   # instaladores para el sistema actual
 Para publicar una versión, sube la versión en `package.json`, `src-tauri/Cargo.toml` y `src-tauri/tauri.conf.json`, y un tag `v*`. GitHub Actions genera los instaladores de Linux, Windows y macOS, publica el release (que las apps instaladas detectan como actualización) y sube copias con nombre fijo para los enlaces de descarga de este README:
 
 ```sh
-git tag v0.1.3 && git push origin v0.1.3
+git tag v0.1.4 && git push origin v0.1.4
 ```
 
-Las capturas del README se generan con datos de ejemplo desde la ruta de demo, que solo existe en desarrollo y simula Claude Code con los mocks de Tauri: con `pnpm dev` abierto, visita `http://localhost:1420/demo?scene=conversation` (o `permission`, `start`).
+Las capturas del README se generan con datos de ejemplo desde la ruta de demo, que solo existe en desarrollo y simula Claude Code con los mocks de Tauri (`http://localhost:1420/demo?scene=conversation`, `permission` o `start`). Con `pnpm dev` abierto, `scripts/screenshots.sh` las captura con Chrome headless y les añade el marco de ventana (requiere ImageMagick).
 
 El workflow necesita los secrets `TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` con la clave de firma del updater. Para generar instaladores en local con `pnpm tauri build` exporta esas mismas variables (o `TAURI_SIGNING_PRIVATE_KEY` con la ruta a la clave).
 

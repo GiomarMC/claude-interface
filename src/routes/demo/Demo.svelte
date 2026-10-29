@@ -6,6 +6,7 @@
   import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
   import { emit } from "@tauri-apps/api/event";
   import App from "../+page.svelte";
+  import { version } from "../../../package.json";
   import { STATUSLINE } from "./statusline";
   import { CWD, FIX_PROMPT, FIX_TURN, ORDERS_TS, PNG, PUSH_PROMPT, PUSH_TURN } from "./scenes";
 
@@ -38,7 +39,7 @@
           case "plugin:path|resolve_directory":
             return "/home/dev";
           case "plugin:app|version":
-            return "0.1.2";
+            return version;
           case "claude_version":
             return "2.1.312";
           case "user_settings":
