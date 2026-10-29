@@ -118,8 +118,31 @@ pub struct GitInfo {
     deletions: u32,
 }
 
+/// En macOS, /usr/bin/git es un señuelo que abre el diálogo "instalar las
+/// herramientas de línea de comandos" si no están instaladas. Solo usamos
+/// un git real, para no pedirle nada al usuario al abrir la app.
+fn git_binary() -> Option<&'static str> {
+    use std::sync::OnceLock;
+    static GIT: OnceLock<Option<&'static str>> = OnceLock::new();
+    *GIT.get_or_init(|| {
+        if !cfg!(target_os = "macos") {
+            return Some("git");
+        }
+        let clt = Command::new("xcode-select")
+            .arg("-p")
+            .output()
+            .is_ok_and(|o| o.status.success());
+        if clt {
+            return Some("git");
+        }
+        ["/opt/homebrew/bin/git", "/usr/local/bin/git"]
+            .into_iter()
+            .find(|p| Path::new(p).is_file())
+    })
+}
+
 fn git(cwd: &str, args: &[&str]) -> Option<String> {
-    let out = Command::new("git")
+    let out = Command::new(git_binary()?)
         .arg("-C")
         .arg(cwd)
         .arg("--no-optional-locks")
