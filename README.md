@@ -98,10 +98,11 @@ No reemplaza a Claude Code: lanza tu `claude` instalado en modo `stream-json`, a
 - **Adjuntar archivos** arrastrándolos, con `Ctrl+O` o pegándolos desde el gestor de archivos. El contenido de los archivos de texto va directo en el mensaje (sin gastar llamadas de búsqueda/lectura); imágenes y PDF se envían directamente; archivos grandes y carpetas se pasan por ruta.
 - **Pegar imágenes** del portapapeles con `Ctrl+V`.
 - **Copiar** cada respuesta como Markdown y cada bloque de código con un clic.
-- **Exportar** la conversación a `.md` (`/export` o `Ctrl+Shift+E`).
+- **Pestañas, paneles divididos y ventanas** como en tu terminal, cada uno con su propia sesión de Claude Code. Los atajos son los de tu emulador (Konsole, GNOME Terminal, kitty, Alacritty, Ghostty y foot en Linux; Windows Terminal y Alacritty en Windows; iTerm2, Terminal.app, kitty, Ghostty y Alacritty en macOS), incluidos los que hayas cambiado en su configuración; lo que tu terminal no tenga usa los habituales del sistema (en macOS, con `Cmd`). Si abres la app desde una terminal, usa los de esa. En Konsole, por ejemplo: `Ctrl+Shift+T` pestaña, `Ctrl+(` / `Ctrl+)` dividir, `Ctrl+Shift+←/→/↑/↓` cambiar de panel, `Shift+←/→` cambiar de pestaña, `Ctrl+Shift+E` maximizar, `Ctrl+Shift+W` cerrar y `Ctrl+Shift+N` nueva ventana. `/keys` muestra los tuyos; los separadores se arrastran para cambiar el tamaño.
+- **Exportar** la conversación a `.md` (`/export` o el atajo de guardar salida de tu terminal, `Ctrl+Shift+S` en Konsole).
 - **Permisos** con el mismo diálogo de la TUI (1/2/3, ↑/↓, Esc), `AskUserQuestion` y aprobación de planes.
 - **Modos** con `Shift+Tab`: normal, accept edits, plan, auto, bypass.
-- **Comandos `/`** con autocompletado de tus comandos y skills, más `/resume`, `/clear`, `/cd`, `/model`, `/effort`, `/copy`, `/font`, `/theme`, `/terminal`.
+- **Comandos `/`** con autocompletado de tus comandos y skills, más `/resume`, `/clear`, `/cd`, `/model`, `/effort`, `/copy`, `/keys`, `/font`, `/theme`, `/terminal`.
 - **`!comando`** ejecuta en tu shell local sin gastar tokens; la salida se adjunta como contexto al siguiente mensaje.
 
 ## Desarrollo

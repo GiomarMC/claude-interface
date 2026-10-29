@@ -56,6 +56,7 @@ const LOCAL_COMMANDS: SlashCommand[] = [
   { name: "resume", description: "Retoma una conversación anterior", local: true },
   { name: "cd", description: "Cambia el directorio de trabajo", local: true },
   { name: "export", description: "Exporta la conversación a Markdown", local: true },
+  { name: "keys", description: "Atajos de pestañas, divisiones y ventanas (los de tu terminal)", local: true },
   { name: "model", description: "Cambia el modelo (opus, sonnet, haiku…)", argumentHint: "<modelo>", local: true },
   { name: "effort", description: "Cambia el nivel de esfuerzo", argumentHint: "low|medium|high|xhigh|max", local: true },
   { name: "font", description: "Fuente y tamaño de la app", argumentHint: "<familia>|<tamaño>|reset", local: true },
@@ -68,7 +69,8 @@ let nextId = 1;
 const uid = () => nextId++;
 
 export class Session {
-  readonly key = "main";
+  /** Identifica el proceso de `claude` en el backend: "<ventana>:<panel>". */
+  constructor(readonly key: string) {}
 
   cwd = $state("");
   home = $state("");
@@ -208,6 +210,13 @@ export class Session {
   async stop() {
     await invoke("stop_session", { key: this.key });
     this.running = false;
+  }
+
+  /** Cierra el proceso y deja de escuchar sus eventos (al cerrar el panel). */
+  async dispose() {
+    this.unlisten.forEach((u) => u());
+    this.unlisten = [];
+    await this.stop();
   }
 
   // ── Envío ────────────────────────────────────────────────────────

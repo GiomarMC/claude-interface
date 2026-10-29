@@ -1,46 +1,35 @@
 <script lang="ts">
   import "../app.css";
-  import { onMount, tick } from "svelte";
+  import { onMount } from "svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { homeDir } from "@tauri-apps/api/path";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { getCurrentWindow } from "@tauri-apps/api/window";
-  import { getVersion } from "@tauri-apps/api/app";
-  import { open, save } from "@tauri-apps/plugin-dialog";
+  import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
   import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-  import { openUrl } from "@tauri-apps/plugin-opener";
-  import { Session, type Attachment } from "$lib/session.svelte";
-  import { prefs, TERMINALS, THEMES } from "$lib/prefs.svelte";
+  import { prefs } from "$lib/prefs.svelte";
   import { updater, RESUME_KEY } from "$lib/updater.svelte";
-  import UpdateBanner from "$lib/components/UpdateBanner.svelte";
+  import { keymap, type Action } from "$lib/keys.svelte";
+  import { ws, type Tab } from "$lib/workspace.svelte";
   import Setup, { type ClaudeStatus } from "$lib/components/Setup.svelte";
-  import { modelName, shortPath } from "$lib/format";
-  import Message from "$lib/components/Message.svelte";
-  import Spinner from "$lib/components/Spinner.svelte";
-  import Permission from "$lib/components/Permission.svelte";
-  import Composer from "$lib/components/Composer.svelte";
-  import SessionPicker from "$lib/components/SessionPicker.svelte";
+  import Pane from "$lib/components/Pane.svelte";
 
-  const s = new Session();
-  let attachments = $state<Attachment[]>([]);
   let dragging = $state(false);
-  let picker = $state(false);
-  let scroller = $state<HTMLDivElement>();
-  let composer = $state<ReturnType<typeof Composer>>();
-  let stick = true;
+  let area = $state<HTMLDivElement>();
   /** Estado de Claude Code si hace falta el asistente de primer arranque. */
   let setup = $state<ClaudeStatus | null>(null);
   let setupDone: (() => void) | undefined;
-  let appVersion = $state("");
-  getVersion().then((v) => (appVersion = v));
 
   const CWD_KEY = "ci.cwd";
+  const win = getCurrentWindow();
+  ws.label = win.label;
+  const isMain = win.label === "main";
 
   onMount(() => {
     let unlistenDrop: (() => void) | undefined;
     (async () => {
-      await Promise.all([s.init(), prefs.load()]);
-      s.home = (await homeDir()).replace(/\/$/, "");
+      await prefs.load();
+      ws.home = (await homeDir()).replace(/\/$/, "");
 
       // Sin Claude Code instalado o sin sesión iniciada, primero el asistente.
       const status = await invoke<ClaudeStatus>("claude_status");
@@ -48,19 +37,23 @@
         setup = status;
         await new Promise<void>((resolve) => (setupDone = resolve));
       }
+      // Ventanas abiertas con "nueva ventana": empiezan en el directorio del panel de origen.
+      const fromWindow = new URLSearchParams(location.search).get("cwd");
       let last: string | null = null;
       try {
         last = localStorage.getItem(CWD_KEY);
       } catch {}
       // Tras instalar una actualización se retoma la conversación que estaba abierta.
       let resume: { sessionId: string; cwd: string } | null = null;
-      try {
-        resume = JSON.parse(localStorage.getItem(RESUME_KEY) ?? "null");
-        localStorage.removeItem(RESUME_KEY);
-      } catch {}
-      if (resume) await startIn(resume.cwd, resume.sessionId);
-      else await startIn((await invoke<string | null>("initial_cwd")) ?? last ?? s.home);
-      updater.start(prefs.config.autoUpdate !== false);
+      if (isMain) {
+        try {
+          resume = JSON.parse(localStorage.getItem(RESUME_KEY) ?? "null");
+          localStorage.removeItem(RESUME_KEY);
+        } catch {}
+      }
+      if (resume) ws.newTab(resume.cwd, resume.sessionId);
+      else ws.newTab(fromWindow ?? (await invoke<string | null>("initial_cwd")) ?? last ?? ws.home);
+      if (isMain) updater.start(prefs.config.autoUpdate !== false);
 
       unlistenDrop = await getCurrentWebview().onDragDropEvent((e) => {
         const p = e.payload;
@@ -68,309 +61,248 @@
         else if (p.type === "leave") dragging = false;
         else if (p.type === "drop") {
           dragging = false;
-          addPaths(p.paths);
+          const id = ws.pane?.id;
+          if (id) ws.api.get(id)?.addPaths(p.paths);
         }
       });
     })();
     return () => {
       unlistenDrop?.();
-      updater.stop();
-      s.stop();
+      if (isMain) updater.stop();
     };
   });
 
-  async function startIn(cwd: string, resume?: string) {
-    try {
-      localStorage.setItem(CWD_KEY, cwd);
-    } catch {}
-    try {
-      await s.start({ cwd, resume });
-    } catch (e) {
-      s.notice(String(e), "error");
-    }
-    getCurrentWindow().setTitle(`Claude · ${cwd.split("/").pop() || cwd}`);
-    await tick();
-    scrollToEnd(true);
-    composer?.focus();
-  }
-
-  async function addPaths(paths: string[]) {
-    for (const path of paths) {
-      if (attachments.some((a) => a.path === path)) continue;
-      try {
-        attachments = [...attachments, await invoke<Attachment>("read_attachment", { path })];
-      } catch (e) {
-        s.notice(String(e), "error");
-      }
-    }
-    composer?.focus();
-  }
-
-  async function pickFiles() {
-    const r = await open({ multiple: true, directory: false, defaultPath: s.cwd });
-    if (r) addPaths(Array.isArray(r) ? r : [r]);
-  }
-
-  async function changeDir() {
-    const r = await open({ directory: true, defaultPath: s.cwd });
-    if (typeof r === "string") await startIn(r);
-  }
-
-  async function exportMd() {
-    const path = await save({
-      defaultPath: `${s.cwd}/conversacion-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-")}.md`,
-      filters: [{ name: "Markdown", extensions: ["md"] }],
-    });
-    if (!path) return;
-    await invoke("write_text_file", { path, content: s.toMarkdown() });
-    s.notice(`Exportado a ${shortPath(path, s.home)}`, "info");
-  }
-
-  async function submit(text: string) {
-    const cmd = text.match(/^\/(\S+)\s*([\s\S]*)$/);
-    if (cmd && !attachments.length) {
-      const [, name, arg] = cmd;
-      switch (name) {
-        case "clear":
-        case "new":
-          return startIn(s.cwd);
-        case "resume":
-          picker = true;
-          return;
-        case "cd":
-          return arg ? startIn(arg.replace(/^~/, s.home)) : changeDir();
-        case "export":
-          return exportMd();
-        case "copy": {
-          const last = [...s.items].reverse().find((i) => i.kind === "text");
-          if (last?.kind === "text") await writeText(last.text);
-          return s.notice("Última respuesta copiada al portapapeles", "info");
-        }
-        case "model":
-          if (arg) return s.setModel(arg.trim());
-          return s.notice(`Modelo actual: ${modelName(s.model) || s.modelPref} · usa /model <opus|sonnet|haiku|id>`);
-        case "font": {
-          const a = arg.trim();
-          if (!a) {
-            return s.notice(
-              `Fuente: ${prefs.fontFamily ?? "monoespaciada del sistema"} · ${prefs.fontSize}px${prefs.config.fontFamily || prefs.config.fontSize ? "" : prefs.terminal ? ` (de ${prefs.terminal.terminal})` : ""} · usa /font <familia>, /font <tamaño> o /font reset (también ctrl + / ctrl - / ctrl 0)`,
-            );
-          }
-          if (a === "reset") await prefs.set({ fontFamily: undefined, fontSize: undefined });
-          else if (/^\d+$/.test(a)) await prefs.set({ fontSize: Math.min(28, Math.max(9, Number(a))) });
-          else await prefs.set({ fontFamily: a.replace(/^["']|["']$/g, "") });
-          return s.notice(`Fuente: ${prefs.fontFamily ?? "monoespaciada del sistema"} · ${prefs.fontSize}px`);
-        }
-        case "terminal": {
-          const a = arg.trim();
-          if (!a) {
-            const found = await invoke<string[]>("detected_terminals");
-            const t = prefs.terminal;
-            const now = t ? `${t.terminal}${t.profile ? ` (${t.profile})` : ""}${t.fontFamily ? ` · ${t.fontFamily} ${t.fontSize ?? ""}pt` : ""}` : "ninguno";
-            return s.notice(
-              `Estilo de terminal: ${now} · modo ${prefs.config.terminal ?? "auto"}\nDetectadas: ${found.join(", ") || "ninguna"}\nUsa /terminal <auto|off|${TERMINALS.join("|")}>`,
-            );
-          }
-          if (a !== "auto" && a !== "off" && !TERMINALS.includes(a as any)) return s.notice(`Terminal desconocida: ${a}`, "error");
-          await prefs.set({ terminal: a === "auto" ? undefined : a });
-          if (a !== "off" && !prefs.terminal) return s.notice(`No encontré configuración de ${a}`, "warn");
-          return s.notice(prefs.terminal ? `Estilo de ${prefs.terminal.terminal}${prefs.terminal.profile ? ` (${prefs.terminal.profile})` : ""}` : "Estilo de terminal desactivado");
-        }
-        case "update": {
-          const a = arg.trim();
-          if (a === "off" || a === "on") {
-            await prefs.set({ autoUpdate: a === "on" ? undefined : false });
-            await updater.start(a === "on");
-            return s.notice(a === "on" ? "Actualizaciones automáticas activadas" : "Actualizaciones automáticas desactivadas");
-          }
-          if (updater.kind === "dev") return s.notice("Build de desarrollo: las actualizaciones están desactivadas", "warn");
-          s.notice("Buscando actualizaciones…");
-          const found = await updater.check();
-          if (updater.status === "error") return s.notice(`No se pudo comprobar: ${updater.error}`, "error");
-          return s.notice(found ? `Nueva versión v${updater.version} disponible` : `Ya tienes la última versión (v${appVersion})`);
-        }
-        case "theme": {
-          const a = arg.trim();
-          if (!a) {
-            const origin = prefs.config.theme ? "elegido en la app" : "de Claude Code";
-            return s.notice(`Tema: ${prefs.theme} (${origin}) · usa /theme <${THEMES.join("|")}|claude>`);
-          }
-          if (a === "claude") {
-            await prefs.set({ theme: undefined });
-            return s.notice(`Tema: ${prefs.theme} (sigue a Claude Code)`);
-          }
-          if (!THEMES.includes(a as any)) return s.notice(`Tema desconocido: ${a}`, "error");
-          await prefs.set({ theme: a });
-          return s.notice(`Tema: ${prefs.theme}`);
-        }
-        case "effort":
-          if (arg) return s.setEffort(arg.trim());
-          return s.notice(`Esfuerzo actual: ${s.effort || "por defecto"} · usa /effort <low|medium|high|xhigh|max>`);
-      }
-    }
-    if (text.startsWith("!") && !attachments.length) {
-      await s.runShell(text.slice(1).trim());
-      return scrollToEnd(true);
-    }
-    const att = attachments;
-    attachments = [];
-    await s.send(text, att);
-    scrollToEnd(true);
-  }
-
-  function scrollToEnd(force = false) {
-    const el = scroller;
-    if (!el || (!force && !stick)) return;
-    requestAnimationFrame(() => (el.scrollTop = el.scrollHeight));
-  }
-
-  function onScroll() {
-    const el = scroller;
-    if (el) stick = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
-  }
-
+  // Los atajos son los de la terminal que se imita (/terminal).
   $effect(() => {
-    void s.items.length;
-    void s.live?.text;
-    void s.permission;
-    void s.busy;
-    scrollToEnd();
+    keymap.load(prefs.config.terminal ?? "auto");
   });
 
-  async function onClick(e: MouseEvent) {
-    const target = e.target as HTMLElement;
-    const copyBtn = target.closest("[data-copy]") as HTMLElement | null;
-    if (copyBtn) {
-      const code = copyBtn.parentElement?.querySelector("code")?.textContent ?? "";
-      await writeText(code);
-      copyBtn.textContent = "✓ copiado";
-      setTimeout(() => (copyBtn.textContent = "copiar"), 1200);
-      return;
+  const dirName = (cwd: string) => cwd.split(/[\\/]/).filter(Boolean).pop() || cwd;
+
+  $effect(() => {
+    const cwd = ws.pane?.session.cwd;
+    if (cwd) win.setTitle(`Claude · ${dirName(cwd)}`);
+  });
+
+  function newWindow() {
+    const bg = getComputedStyle(document.documentElement).getPropertyValue("--bg").trim();
+    new WebviewWindow(`w${Date.now()}`, {
+      url: `/?cwd=${encodeURIComponent(ws.cwd)}`,
+      title: "Claude Interface",
+      width: 1180,
+      height: 860,
+      minWidth: 560,
+      minHeight: 420,
+      dragDropEnabled: true,
+      ...(bg.startsWith("#") ? { backgroundColor: bg } : {}),
+    });
+  }
+
+  function closePane() {
+    if (!ws.closePane()) win.close();
+  }
+
+  function closeTab(i = ws.active) {
+    if (!ws.closeTab(i)) win.close();
+  }
+
+  /** Ejecuta la acción de un atajo. Devuelve false si no aplica y la tecla debe seguir su camino. */
+  function run(action: Action): boolean {
+    const tab = ws.tab;
+    const multiPane = !!tab && ws.panes(tab).length > 1;
+    const multiTab = ws.tabs.length > 1;
+    const pane = ws.pane;
+    const api = pane ? ws.api.get(pane.id) : undefined;
+    const goto = action.match(/^goto_tab_(\d+)$/);
+    if (goto) {
+      const i = Number(goto[1]) - 1;
+      if (i >= ws.tabs.length) return false;
+      ws.gotoTab(i);
+      return true;
     }
-    const a = target.closest("a[href]") as HTMLAnchorElement | null;
-    if (a && /^https?:/.test(a.href)) {
+    switch (action) {
+      case "new_tab":
+        ws.newTab();
+        return true;
+      case "new_window":
+        newWindow();
+        return true;
+      case "close_pane":
+        closePane();
+        return true;
+      case "close_tab":
+        closeTab();
+        return true;
+      case "split_right":
+        ws.split("row");
+        return true;
+      case "split_down":
+        ws.split("column");
+        return true;
+      // Como en las terminales, moverse entre pestañas o paneles solo
+      // captura la tecla cuando hay a dónde moverse.
+      case "next_tab":
+      case "prev_tab":
+        if (!multiTab) return false;
+        ws.cycleTab(action === "next_tab" ? 1 : -1);
+        return true;
+      case "move_tab_left":
+      case "move_tab_right":
+        if (!multiTab) return false;
+        ws.moveTab(action === "move_tab_left" ? -1 : 1);
+        return true;
+      case "focus_left":
+      case "focus_right":
+      case "focus_up":
+      case "focus_down":
+        if (!multiPane) return false;
+        ws.focusDirection(action.slice(6) as "left");
+        return true;
+      case "next_pane":
+      case "prev_pane":
+        if (!multiPane) return false;
+        ws.cyclePane(action === "next_pane" ? 1 : -1);
+        return true;
+      case "maximize_pane":
+        if (!tab || !multiPane) return false;
+        tab.zoomed = !tab.zoomed;
+        return true;
+      case "zoom_in":
+        prefs.zoom(1);
+        return true;
+      case "zoom_out":
+        prefs.zoom(-1);
+        return true;
+      case "zoom_reset":
+        prefs.zoom(0);
+        return true;
+      case "export":
+        api?.exportMd();
+        return true;
+      case "copy": {
+        const text = window.getSelection()?.toString();
+        if (!text) return false;
+        writeText(text);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  // Los atajos de la terminal van primero, como en un emulador: la app de
+  // dentro (aquí, el cuadro de texto) solo recibe las teclas que no usa.
+  function onKeyCapture(e: KeyboardEvent) {
+    if (setup || e.isComposing || !ws.tab) return;
+    const action = keymap.match(e);
+    if (action && run(action)) {
       e.preventDefault();
-      openUrl(a.href);
+      e.stopPropagation();
     }
   }
 
-  function onGlobalKey(e: KeyboardEvent) {
+  function onKey(e: KeyboardEvent) {
+    const s = ws.pane?.session;
+    if (!s) return;
     if (e.key === "Escape" && s.busy && !s.permission) s.interrupt();
-    else if (e.ctrlKey && e.key.toLowerCase() === "o") {
+    else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "o") {
       e.preventDefault();
-      pickFiles();
-    } else if (e.ctrlKey && (e.key === "=" || e.key === "+")) {
-      e.preventDefault();
-      prefs.zoom(1);
-    } else if (e.ctrlKey && e.key === "-") {
-      e.preventDefault();
-      prefs.zoom(-1);
-    } else if (e.ctrlKey && e.key === "0") {
-      e.preventDefault();
-      prefs.zoom(0);
-    } else if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "e") {
-      e.preventDefault();
-      exportMd();
+      ws.api.get(ws.pane!.id)?.pickFiles();
     }
   }
+
+  // ── Separadores ──────────────────────────────────────────────────
+
+  function startResize(e: PointerEvent, tab: Tab, split: string, index: number, dir: "row" | "column") {
+    e.preventDefault();
+    const el = e.currentTarget as HTMLElement;
+    el.setPointerCapture(e.pointerId);
+    const move = (ev: PointerEvent) => {
+      const r = area!.getBoundingClientRect();
+      const pos = dir === "row" ? (ev.clientX - r.left) / r.width : (ev.clientY - r.top) / r.height;
+      ws.resize(tab, split, index, pos);
+    };
+    const up = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+  }
+
+  const layouts = $derived(new Map(ws.tabs.map((t) => [t.id, ws.layout(t)])));
+  const pct = (n: number) => `${n * 100}%`;
 </script>
 
-<svelte:window onkeydown={onGlobalKey} />
+<svelte:window onkeydowncapture={onKeyCapture} onkeydown={onKey} />
 
-<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_noninteractive_element_interactions -->
-<main onclick={onClick}>
+<main>
   {#if setup}
     <div class="scroll">
       <Setup
         status={setup}
-        onready={(st) => {
-          if (st.version) s.version = st.version;
+        onready={() => {
           setup = null;
           setupDone?.();
         }}
       />
     </div>
   {:else}
-  <div class="scroll" bind:this={scroller} onscroll={onScroll}>
-    <div class="transcript">
-      <header class="welcome">
-        <div class="legend"><span class="claude">✻</span> Claude Interface{appVersion ? ` v${appVersion}` : ""} <span class="faint">· Claude Code{s.version ? ` v${s.version}` : ""}</span></div>
-        <div class="cols">
-          <div class="logo" aria-hidden="true">
-            <pre>{` ▐▛███▜▌\n▝▜█████▛▘\n  ▘▘ ▝▝`}</pre>
-          </div>
-          <div class="info">
-            <div class="bold">¡Bienvenido de vuelta!</div>
-            <div class="dim">{modelName(s.model) || s.modelPref || "modelo por defecto"} · {s.effort || "effort por defecto"}</div>
-            <button class="cwd" onclick={changeDir} title="Cambiar directorio">{shortPath(s.cwd, s.home)}</button>
-          </div>
-          <div class="tips">
-            <div class="claude">Atajos</div>
-            <div><span class="k">arrastra</span> o <span class="k">ctrl+o</span> adjunta archivos · <span class="k">ctrl+v</span> pega imágenes</div>
-            <div><span class="k">/resume</span> retomar · <span class="k">/export</span> a .md · <span class="k">/cd</span> cambiar carpeta</div>
-            <div><span class="k">!cmd</span> ejecuta en shell local (sin tokens) · <span class="k">/font</span> <span class="k">/theme</span> <span class="k">/terminal</span> <span class="k">ctrl ±</span> tamaño</div>
-          </div>
-        </div>
-      </header>
+    {#if ws.tabs.length > 1 || ws.tab?.zoomed}
+      <nav class="tabs" aria-label="Pestañas">
+        {#each ws.tabs as tab, i (tab.id)}
+          {@const panes = ws.panes(tab)}
+          {@const focused = panes.find((p) => p.id === tab.focus) ?? panes[0]}
+          {@const waiting = panes.some((p) => p.session.permission)}
+          {@const busy = panes.some((p) => p.session.busy)}
+          <button
+            class="tab"
+            class:active={i === ws.active}
+            onclick={() => ws.gotoTab(i)}
+            onauxclick={(e) => e.button === 1 && closeTab(i)}
+            title={focused.session.cwd}
+          >
+            <span class="num">{i + 1}</span>
+            <span class="name">{dirName(focused.session.cwd || focused.cwd)}</span>
+            {#if panes.length > 1}<span class="faint">[{panes.length}]</span>{/if}
+            {#if tab.zoomed}<span class="faint">[Z]</span>{/if}
+            {#if waiting}<span class="warn">!</span>{:else if busy}<span class="claude">✻</span>{/if}
+          </button>
+        {/each}
+      </nav>
+    {/if}
 
-      {#each s.items as item (item.id)}
-        <Message {item} cwd={s.cwd} />
+    <div class="area" bind:this={area}>
+      {#each ws.allPanes as { pane, tab } (pane.id)}
+        {@const rect = layouts.get(tab.id)?.panes.find((p) => p.id === pane.id)?.rect}
+        {@const visible = tab === ws.tab && !!rect}
+        <div
+          class="slot"
+          class:hidden={!visible}
+          class:focused={visible && tab.focus === pane.id && ws.panes(tab).length > 1 && !tab.zoomed}
+          style:left={pct(rect?.x ?? 0)}
+          style:top={pct(rect?.y ?? 0)}
+          style:width={pct(rect?.w ?? 1)}
+          style:height={pct(rect?.h ?? 1)}
+        >
+          <Pane {pane} active={visible && tab.focus === pane.id} />
+        </div>
       {/each}
 
-      {#if s.live?.text}
-        {#if s.live.kind === "text"}
-          <Message item={{ kind: "text", id: -1, text: s.live.text }} cwd={s.cwd} />
-        {:else}
-          <div class="live-thinking">✻ Thinking… <span class="faint">{s.live.text.slice(-160)}</span></div>
-        {/if}
-      {/if}
-
-      {#if s.permission}
-        {#key s.permission.requestId}
-          <Permission {s} req={s.permission} />
-        {/key}
-      {:else if s.busy}
-        <Spinner since={s.turnStart} tokens={s.thinkingTokens} />
-      {/if}
-
-      {#if !s.running && s.stderr.length}
-        <div class="stderr">
-          <div class="bold">claude terminó:</div>
-          <pre>{s.stderr.join("\n")}</pre>
-        </div>
-      {/if}
-
-      {#if picker}
-        <SessionPicker
-          cwd={s.cwd}
-          onclose={() => {
-            picker = false;
-            composer?.focus();
-          }}
-          onpick={(id) => {
-            picker = false;
-            startIn(s.cwd, id);
-          }}
-        />
+      {#if ws.tab}
+        {@const tab = ws.tab}
+        {#each layouts.get(tab.id)?.dividers ?? [] as d (d.split + d.index)}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="divider {d.dir}"
+            style:left={d.dir === "row" ? pct(d.at) : pct(d.area.x)}
+            style:top={d.dir === "row" ? pct(d.area.y) : pct(d.at)}
+            style:width={d.dir === "row" ? null : pct(d.area.w)}
+            style:height={d.dir === "row" ? pct(d.area.h) : null}
+            onpointerdown={(e) => startResize(e, tab, d.split, d.index, d.dir)}
+          ></div>
+        {/each}
       {/if}
     </div>
-  </div>
-
-  <div class="bottom">
-    <div class="transcript">
-      <UpdateBanner busy={s.busy} oninstall={() => updater.install(s.sessionId, s.cwd)} />
-    </div>
-    <div class="transcript">
-      <Composer
-        bind:this={composer}
-        {s}
-        bind:attachments
-        onsubmit={submit}
-        onattach={pickFiles}
-        onpastepaths={addPaths}
-      />
-    </div>
-  </div>
   {/if}
 
   {#if dragging}
@@ -395,87 +327,104 @@
     overflow-y: auto;
     padding-top: 1em;
   }
-  .transcript {
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 0 var(--gutter);
-  }
-  .bottom .transcript {
-    padding: 0;
-  }
-  .bottom {
-    flex: none;
-    padding-top: 0.4em;
-  }
   .claude {
     color: var(--claude);
   }
-  .welcome {
-    position: relative;
-    border: 1px solid var(--claude);
-    border-radius: 8px;
-    padding: 1em 2ch 0.8em;
-    margin: 0.6em 0 1.2em;
+  .warn {
+    color: var(--warning);
   }
-  .legend {
-    position: absolute;
-    top: -0.75em;
-    left: 2ch;
-    background: var(--bg);
-    padding: 0 1ch;
-  }
-  .cols {
+  .tabs {
+    flex: none;
     display: flex;
-    gap: 3ch;
-    align-items: center;
-    flex-wrap: wrap;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--border-faint);
+    scrollbar-width: none;
   }
-  .logo pre {
-    margin: 0;
-    color: var(--claude);
-    font-family: var(--font);
-    line-height: 1.1;
-  }
-  .info {
+  .tab {
     display: flex;
-    flex-direction: column;
-    min-width: 20ch;
-  }
-  .cwd {
-    text-align: left;
+    gap: 0.8ch;
+    align-items: baseline;
+    padding: 0.25em 1.5ch;
     color: var(--text-dim);
-    text-decoration: underline dotted var(--text-faint);
-  }
-  .cwd:hover {
-    color: var(--claude);
-  }
-  .tips {
-    flex: 1;
-    border-left: 1px solid var(--claude);
-    padding-left: 2ch;
-    font-size: 0.93em;
-    color: var(--text-dim);
-    min-width: 30ch;
-  }
-  .k {
-    color: var(--text);
-  }
-  .live-thinking {
-    color: var(--text-dim);
-    font-style: italic;
-    margin: 0.9em 0;
-    overflow: hidden;
     white-space: nowrap;
+    border-right: 1px solid var(--border-faint);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab:hover {
+    color: var(--text);
+    background: var(--bg-hover);
+  }
+  .tab.active {
+    color: var(--text);
+    border-bottom-color: var(--claude);
+  }
+  .tab.active .num {
+    color: var(--claude);
+  }
+  .num {
+    color: var(--text-faint);
+  }
+  .name {
+    max-width: 24ch;
+    overflow: hidden;
     text-overflow: ellipsis;
   }
-  .stderr {
-    color: var(--error);
-    margin: 1em 0;
+  .area {
+    flex: 1;
+    position: relative;
+    min-height: 0;
   }
-  .stderr pre {
-    white-space: pre-wrap;
-    font-family: var(--font);
-    font-size: 0.86em;
+  .slot {
+    position: absolute;
+    overflow: hidden;
+  }
+  /* Ocultos sin display:none, para que conserven el scroll. */
+  .slot.hidden {
+    visibility: hidden;
+    pointer-events: none;
+    z-index: -1;
+  }
+  .slot.focused::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 1px solid color-mix(in srgb, var(--claude) 55%, transparent);
+    pointer-events: none;
+  }
+  .divider {
+    position: absolute;
+    z-index: 2;
+  }
+  .divider::before {
+    content: "";
+    position: absolute;
+    background: var(--border-faint);
+  }
+  .divider.row {
+    width: 7px;
+    margin-left: -3px;
+    cursor: col-resize;
+  }
+  .divider.row::before {
+    left: 3px;
+    width: 1px;
+    top: 0;
+    bottom: 0;
+  }
+  .divider.column {
+    height: 7px;
+    margin-top: -3px;
+    cursor: row-resize;
+  }
+  .divider.column::before {
+    top: 3px;
+    height: 1px;
+    left: 0;
+    right: 0;
+  }
+  .divider:hover::before {
+    background: var(--claude);
   }
   .drop {
     position: absolute;
@@ -484,6 +433,7 @@
     display: grid;
     place-items: center;
     pointer-events: none;
+    z-index: 5;
   }
   .drop-box {
     border: 1px dashed var(--claude);

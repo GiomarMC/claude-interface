@@ -3,7 +3,8 @@
   import { highlight, renderMarkdown } from "$lib/markdown";
   import { relPath, toolTitle, type PermissionRequest, type Session } from "$lib/session.svelte";
 
-  let { s, req }: { s: Session; req: PermissionRequest } = $props();
+  // `autofocus`: false en paneles sin foco, para no robárselo al que se usa.
+  let { s, req, autofocus = true }: { s: Session; req: PermissionRequest; autofocus?: boolean } = $props();
 
   type Option = { label: string; run: () => void };
 
@@ -149,7 +150,9 @@
     e.preventDefault();
   }
 
-  onMount(() => root.focus());
+  onMount(() => {
+    if (autofocus) root.focus();
+  });
 
   const title = $derived.by(() => {
     switch (req.toolName) {

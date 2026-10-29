@@ -34,6 +34,8 @@ pub const TERMINALS: &[&str] = &[
     "ghostty",
     "foot",
     "windows-terminal",
+    "iterm2",
+    "terminal-app",
 ];
 
 fn hex(r: u8, g: u8, b: u8) -> String {
@@ -73,7 +75,7 @@ fn parse_color(s: &str) -> Option<String> {
 }
 
 /// INI sencillo: [sección] clave=valor.
-fn parse_ini(text: &str) -> Vec<(String, String, String)> {
+pub(crate) fn parse_ini(text: &str) -> Vec<(String, String, String)> {
     let mut section = String::new();
     let mut out = vec![];
     for line in text.lines() {
@@ -96,13 +98,13 @@ fn ini_get<'a>(ini: &'a [(String, String, String)], section: &str, key: &str) ->
         .map(|(_, _, v)| v.as_str())
 }
 
-fn config_home() -> Option<PathBuf> {
+pub(crate) fn config_home() -> Option<PathBuf> {
     std::env::var_os("XDG_CONFIG_HOME")
         .map(PathBuf::from)
         .or_else(|| home_dir().map(|h| h.join(".config")))
 }
 
-fn data_dirs() -> Vec<PathBuf> {
+pub(crate) fn data_dirs() -> Vec<PathBuf> {
     let mut dirs = vec![];
     if let Some(d) = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from) {
         dirs.push(d);
@@ -186,7 +188,7 @@ fn konsole() -> Option<TerminalStyle> {
 
 // ── GNOME Terminal ──────────────────────────────────────────────────
 
-fn gsettings(args: &[&str]) -> Option<String> {
+pub(crate) fn gsettings(args: &[&str]) -> Option<String> {
     let out = Command::new("gsettings").args(args).output().ok()?;
     out.status
         .success()
@@ -263,9 +265,18 @@ fn kitty_read(path: &Path, style: &mut TerminalStyle, depth: u8) {
     }
 }
 
+/// kitty.conf: $KITTY_CONFIG_DIRECTORY, ~/.config/kitty o, en macOS, ~/Library/Preferences/kitty.
+pub(crate) fn kitty_conf() -> Option<PathBuf> {
+    let mut dirs: Vec<PathBuf> = std::env::var_os("KITTY_CONFIG_DIRECTORY").map(PathBuf::from).into_iter().collect();
+    dirs.extend(config_home().map(|c| c.join("kitty")));
+    if cfg!(target_os = "macos") {
+        dirs.extend(home_dir().map(|h| h.join("Library/Preferences/kitty")));
+    }
+    dirs.into_iter().map(|d| d.join("kitty.conf")).find(|p| p.is_file())
+}
+
 fn kitty() -> Option<TerminalStyle> {
-    let path = config_home()?.join("kitty/kitty.conf");
-    path.is_file().then_some(())?;
+    let path = kitty_conf()?;
     let mut style = TerminalStyle { terminal: "kitty".into(), ..Default::default() };
     kitty_read(&path, &mut style, 0);
     Some(style)
@@ -320,15 +331,17 @@ fn alacritty_read(path: &Path, style: &mut TerminalStyle, depth: u8) {
     }
 }
 
-fn alacritty() -> Option<TerminalStyle> {
-    let base = config_home()?.join("alacritty");
-    let path = [base.join("alacritty.toml"), base.join("alacritty.yml")]
-        .into_iter()
+/// alacritty.toml: ~/.config/alacritty o, en Windows, %APPDATA%\alacritty.
+pub(crate) fn alacritty_conf() -> Option<PathBuf> {
+    let base = config_home().map(|c| c.join("alacritty"));
+    base.iter()
+        .flat_map(|b| [b.join("alacritty.toml"), b.join("alacritty.yml")])
+        .chain(std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("alacritty/alacritty.toml")))
         .find(|p| p.is_file())
-        .or_else(|| {
-            let win = std::env::var_os("APPDATA").map(PathBuf::from)?.join("alacritty/alacritty.toml");
-            win.is_file().then_some(win)
-        })?;
+}
+
+fn alacritty() -> Option<TerminalStyle> {
+    let path = alacritty_conf()?;
     let mut style = TerminalStyle { terminal: "alacritty".into(), ..Default::default() };
     alacritty_read(&path, &mut style, 0);
     Some(style)
@@ -336,9 +349,22 @@ fn alacritty() -> Option<TerminalStyle> {
 
 // ── Ghostty ─────────────────────────────────────────────────────────
 
+/// Configuración de Ghostty: ~/.config/ghostty o, en macOS,
+/// ~/Library/Application Support/com.mitchellh.ghostty ("config" o "config.ghostty").
+pub(crate) fn ghostty_conf() -> Option<PathBuf> {
+    let mut dirs: Vec<PathBuf> = config_home().map(|c| c.join("ghostty")).into_iter().collect();
+    if cfg!(target_os = "macos") {
+        dirs.extend(home_dir().map(|h| h.join("Library/Application Support/com.mitchellh.ghostty")));
+    }
+    dirs.into_iter()
+        .flat_map(|d| [d.join("config"), d.join("config.ghostty")])
+        .find(|p| p.is_file())
+}
+
 fn ghostty() -> Option<TerminalStyle> {
-    let dir = config_home()?.join("ghostty");
-    let text = fs::read_to_string(dir.join("config")).ok()?;
+    let path = ghostty_conf()?;
+    let dir = path.parent()?.to_path_buf();
+    let text = fs::read_to_string(&path).ok()?;
     let mut style = TerminalStyle { terminal: "ghostty".into(), ..Default::default() };
     let mut lines: Vec<String> = text.lines().map(String::from).collect();
     // theme = nombre → ~/.config/ghostty/themes/nombre (los temas integrados no se pueden leer)
@@ -416,7 +442,7 @@ const CAMPBELL: [&str; 18] = [
 ];
 
 /// Quita comentarios // y /* */ de un JSONC sin tocar cadenas.
-fn strip_jsonc(text: &str) -> String {
+pub(crate) fn strip_jsonc(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
     let mut in_str = false;
@@ -535,9 +561,26 @@ fn windows_terminal() -> Option<TerminalStyle> {
     Some(style)
 }
 
+// ── iTerm2 y Terminal.app (macOS) ───────────────────────────────────
+
+/// Sus colores están en plists binarios; de estas solo se usan los atajos
+/// (ver keys.rs), así que basta con saber si están instaladas.
+pub(crate) fn iterm2_installed() -> bool {
+    cfg!(target_os = "macos")
+        && (Path::new("/Applications/iTerm.app").is_dir()
+            || home_dir().is_some_and(|h| {
+                h.join("Applications/iTerm.app").is_dir()
+                    || h.join("Library/Preferences/com.googlecode.iterm2.plist").is_file()
+            }))
+}
+
+fn mac_terminal(name: &str, installed: bool) -> Option<TerminalStyle> {
+    installed.then(|| TerminalStyle { terminal: name.into(), ..Default::default() })
+}
+
 // ── Selección ───────────────────────────────────────────────────────
 
-fn read(name: &str) -> Option<TerminalStyle> {
+pub(crate) fn read(name: &str) -> Option<TerminalStyle> {
     match name {
         "konsole" => konsole(),
         "gnome-terminal" => gnome_terminal(),
@@ -546,15 +589,37 @@ fn read(name: &str) -> Option<TerminalStyle> {
         "ghostty" => ghostty(),
         "foot" => foot(),
         "windows-terminal" => windows_terminal(),
+        "iterm2" => mac_terminal("iterm2", iterm2_installed()),
+        "terminal-app" => mac_terminal("terminal-app", cfg!(target_os = "macos")),
         _ => None,
     }
 }
 
 /// Orden de búsqueda en modo automático: primero la terminal propia del
 /// escritorio, después las configuradas a mano.
-fn auto_order() -> Vec<&'static str> {
+pub(crate) fn auto_order() -> Vec<&'static str> {
     let desktop = std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().to_uppercase();
     let mut order: Vec<&str> = vec![];
+    // Si la app se abrió desde una terminal, esa es la que se usa.
+    let env = |k: &str| std::env::var_os(k).is_some();
+    let term_program = std::env::var("TERM_PROGRAM").unwrap_or_default();
+    if term_program == "iTerm.app" {
+        order.push("iterm2");
+    } else if term_program == "Apple_Terminal" {
+        order.push("terminal-app");
+    } else if term_program == "ghostty" || env("GHOSTTY_RESOURCES_DIR") {
+        order.push("ghostty");
+    } else if env("KITTY_WINDOW_ID") {
+        order.push("kitty");
+    } else if env("ALACRITTY_SOCKET") || env("ALACRITTY_LOG") {
+        order.push("alacritty");
+    } else if env("KONSOLE_VERSION") {
+        order.push("konsole");
+    } else if env("WT_SESSION") {
+        order.push("windows-terminal");
+    } else if env("GNOME_TERMINAL_SCREEN") {
+        order.push("gnome-terminal");
+    }
     if cfg!(windows) {
         order.push("windows-terminal");
     } else if desktop.contains("KDE") {
@@ -562,7 +627,8 @@ fn auto_order() -> Vec<&'static str> {
     } else if desktop.contains("GNOME") || desktop.contains("UNITY") || desktop.contains("CINNAMON") {
         order.push("gnome-terminal");
     }
-    for t in ["kitty", "alacritty", "ghostty", "foot", "konsole", "gnome-terminal"] {
+    // En macOS, después de las configuradas a mano, iTerm2 y la de Apple.
+    for t in ["kitty", "alacritty", "ghostty", "foot", "konsole", "gnome-terminal", "iterm2", "terminal-app"] {
         if !order.contains(&t) {
             order.push(t);
         }

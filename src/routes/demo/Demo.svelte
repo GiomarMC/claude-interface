@@ -12,7 +12,7 @@
 
   const scene = new URLSearchParams(location.search).get("scene") ?? "conversation";
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-  const line = (obj: unknown) => emit("claude-event", { key: "main", line: JSON.stringify(obj) });
+  const line = (obj: unknown) => emit("claude-event", { key: "main:1", line: JSON.stringify(obj) });
 
   const COMMANDS = [
     { name: "review", description: "Revisa un pull request" },
@@ -63,6 +63,25 @@
             return {};
           case "terminal_style":
             return null;
+          case "terminal_keys":
+            return {
+              terminal: "konsole",
+              bindings: {
+                new_tab: ["ctrl+shift+t"],
+                close_pane: ["ctrl+shift+w", "ctrl+shift+x"],
+                next_tab: ["shift+right"],
+                prev_tab: ["shift+left"],
+                split_right: ["ctrl+("],
+                split_down: ["ctrl+)"],
+                focus_left: ["ctrl+shift+left"],
+                focus_right: ["ctrl+shift+right"],
+                focus_up: ["ctrl+shift+up"],
+                focus_down: ["ctrl+shift+down"],
+                maximize_pane: ["ctrl+shift+e"],
+                goto_tab_1: ["alt+1"],
+                goto_tab_2: ["alt+2"],
+              },
+            };
           case "install_kind":
             return "dev";
           case "claude_status":

@@ -219,6 +219,19 @@ fn stop(state: &State<Sessions>, key: &str) {
     }
 }
 
+/// Termina las sesiones de una ventana que se cerró.
+pub fn stop_window(state: &Sessions, label: &str) {
+    let prefix = format!("{label}:");
+    let mut sessions = state.0.lock().unwrap();
+    let keys: Vec<String> = sessions.keys().filter(|k| k.starts_with(&prefix)).cloned().collect();
+    for key in keys {
+        if let Some(mut s) = sessions.remove(&key) {
+            let _ = s.child.kill();
+            let _ = s.child.wait();
+        }
+    }
+}
+
 #[tauri::command]
 pub fn stop_session(state: State<Sessions>, key: String) {
     stop(&state, &key);

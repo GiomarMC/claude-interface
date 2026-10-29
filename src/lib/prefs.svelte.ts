@@ -20,6 +20,8 @@ export const TERMINALS = [
   "ghostty",
   "foot",
   "windows-terminal",
+  "iterm2",
+  "terminal-app",
 ] as const;
 
 export const DEFAULT_FONT_SIZE = 14;
