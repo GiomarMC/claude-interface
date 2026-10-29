@@ -5,6 +5,7 @@
   import { homeDir } from "@tauri-apps/api/path";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { getCurrentWindow } from "@tauri-apps/api/window";
+  import { getVersion } from "@tauri-apps/api/app";
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { writeText } from "@tauri-apps/plugin-clipboard-manager";
   import { openUrl } from "@tauri-apps/plugin-opener";
@@ -24,6 +25,8 @@
   let scroller: HTMLDivElement;
   let composer: ReturnType<typeof Composer>;
   let stick = true;
+  let appVersion = $state("");
+  getVersion().then((v) => (appVersion = v));
 
   const CWD_KEY = "ci.cwd";
 
@@ -243,7 +246,7 @@
   <div class="scroll" bind:this={scroller} onscroll={onScroll}>
     <div class="transcript">
       <header class="welcome">
-        <div class="legend"><span class="claude">✻</span> Claude Interface <span class="faint">· Claude Code {s.version ? `v${s.version}` : ""}</span></div>
+        <div class="legend"><span class="claude">✻</span> Claude Interface{appVersion ? ` v${appVersion}` : ""} <span class="faint">· Claude Code{s.version ? ` v${s.version}` : ""}</span></div>
         <div class="cols">
           <div class="logo" aria-hidden="true">
             <pre>{` ▐▛███▜▌\n▝▜█████▛▘\n  ▘▘ ▝▝`}</pre>

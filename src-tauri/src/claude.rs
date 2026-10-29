@@ -165,6 +165,21 @@ pub fn start_session(
     Ok(())
 }
 
+/// `claude --version` → "2.1.312"
+#[tauri::command]
+pub async fn claude_version() -> Option<String> {
+    let mut cmd = Command::new(find_claude());
+    cmd.arg("--version");
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    let out = cmd.output().ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    text.split_whitespace().next().map(String::from)
+}
+
 #[tauri::command]
 pub fn send_line(state: State<Sessions>, key: String, line: String) -> Result<(), String> {
     let mut sessions = state.0.lock().unwrap();

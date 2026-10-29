@@ -117,6 +117,9 @@ export class Session {
   private unlisten: (() => void)[] = [];
 
   async init() {
+    invoke<string | null>("claude_version").then((v) => {
+      if (v && !this.version) this.version = v;
+    });
     this.unlisten.push(
       await listen<{ key: string; line: string }>("claude-event", (e) => {
         if (e.payload.key !== this.key) return;

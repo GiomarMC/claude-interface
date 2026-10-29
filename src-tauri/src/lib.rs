@@ -15,6 +15,7 @@ pub fn run() {
             claude::start_session,
             claude::send_line,
             claude::stop_session,
+            claude::claude_version,
             files::read_attachment,
             files::git_info,
             files::list_sessions,
