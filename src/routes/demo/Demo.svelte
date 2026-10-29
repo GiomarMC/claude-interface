@@ -1,13 +1,14 @@
 <script lang="ts">
   // Demo para las capturas del README: simula el backend con los mocks de
   // Tauri y reproduce una conversación a través del código real de la app.
-  // Uso: /demo?scene=conversation|permission|start (solo en `pnpm dev`).
+  // Uso: /demo?scene=conversation|permission|start|setup|terminal (solo en `pnpm dev`).
   import { onMount } from "svelte";
   import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
   import { emit } from "@tauri-apps/api/event";
   import App from "../+page.svelte";
   import { version } from "../../../package.json";
   import { STATUSLINE } from "./statusline";
+  import { RESUME_KEY } from "$lib/updater.svelte";
   import { CWD, FIX_PROMPT, FIX_TURN, ORDERS_TS, PNG, PUSH_PROMPT, PUSH_TURN } from "./scenes";
 
   const scene = new URLSearchParams(location.search).get("scene") ?? "conversation";
@@ -26,6 +27,55 @@
     ? { installed: false, loggedIn: null as boolean | null, version: null as string | null }
     : { installed: true, loggedIn: true, version: "2.1.312" };
 
+  // Shell simulado para la escena "terminal": eco, un par de comandos y la
+  // misma secuencia OSC 633 que emite la función `claude` de la integración.
+  const shell = (() => {
+    const ttys = new Map<string, { id: number; n: number; line: string; cwd: string; waiting: boolean }>();
+    const b64 = (s: string) => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
+    const out = (key: string, data: string) => {
+      const t = ttys.get(key)!;
+      (window as any).__TAURI_INTERNALS__.runCallback(t.id, { index: t.n++, message: { kind: "data", data } });
+    };
+    const prompt = (key: string) => out(key, `\x1b[32mdev@laptop\x1b[0m:\x1b[34m${ttys.get(key)!.cwd.replace("/home/dev", "~")}\x1b[0m$ `);
+    return {
+      spawn(key: string, channel: { id: number }) {
+        ttys.set(key, { id: channel.id, n: 0, line: "", cwd: CWD, waiting: false });
+        setTimeout(() => prompt(key), 50);
+      },
+      write(key: string, data: string) {
+        const t = ttys.get(key);
+        if (!t) return;
+        for (const ch of data) {
+          if (ch !== "\r") {
+            t.line += ch;
+            if (!t.waiting) out(key, ch);
+            continue;
+          }
+          const line = t.line;
+          t.line = "";
+          if (t.waiting) {
+            if (line === "ok") continue;
+            t.waiting = false;
+            if (line.startsWith("cd:")) t.cwd = line.slice(3);
+            prompt(key);
+            continue;
+          }
+          out(key, "\r\n");
+          const [cmd, ...rest] = line.trim().split(/\s+/);
+          if (cmd === "claude") {
+            t.waiting = true;
+            out(key, `\x1b]633;ClaudeInterface;${b64(t.cwd)};${b64(rest.map((a) => a + "\0").join(""))}\x07`);
+            continue;
+          }
+          if (cmd === "ls") out(key, "README.md  package.json  \x1b[34msrc\x1b[0m  \x1b[34mtests\x1b[0m\r\n");
+          else if (cmd === "pwd") out(key, t.cwd + "\r\n");
+          else if (cmd) out(key, `${cmd}: orden no encontrada\r\n`);
+          prompt(key);
+        }
+      },
+    };
+  })();
+
   async function stream(chunks: string[], exit: number | null) {
     for (const c of chunks) {
       await sleep(120);
@@ -43,6 +93,9 @@
 
   {
     localStorage.clear();
+    // Las escenas de conversación abren directamente la interfaz de Claude;
+    // "terminal" empieza en un shell simulado.
+    if (scene !== "terminal") localStorage.setItem(RESUME_KEY, JSON.stringify({ sessionId: "", cwd: CWD }));
     mockWindows("main");
     mockIPC(
       (cmd, args: any) => {
@@ -62,15 +115,30 @@
           case "app_config":
             return {};
           case "terminal_style":
-            return null;
+            // La escena de terminal muestra el estilo por defecto de Windows (Breeze).
+            return scene === "terminal"
+              ? {
+                  terminal: "default",
+                  profile: "Breeze",
+                  fontFamily: "Cascadia Mono",
+                  fontSize: 11,
+                  background: "#232627",
+                  foreground: "#fcfcfc",
+                  palette: ["#232627", "#ed1515", "#11d116", "#f67400", "#1d99f3", "#9b59b6", "#1abc9c", "#fcfcfc", "#7f8c8d", "#c0392b", "#1cdc9a", "#fdbc4b", "#3daee9", "#8e44ad", "#16a085", "#ffffff"],
+                  cursorShape: "bar",
+                  cursorBlink: false,
+                }
+              : null;
           case "terminal_keys":
             return {
               terminal: "konsole",
               bindings: {
                 new_tab: ["ctrl+shift+t"],
                 close_pane: ["ctrl+shift+w", "ctrl+shift+x"],
-                next_tab: ["shift+right"],
-                prev_tab: ["shift+left"],
+                next_tab: ["shift+right", "ctrl+tab"],
+                prev_tab: ["shift+left", "ctrl+shift+tab"],
+                copy: ["ctrl+shift+c"],
+                paste: ["ctrl+shift+v"],
                 split_right: ["ctrl+("],
                 split_down: ["ctrl+)"],
                 focus_left: ["ctrl+shift+left"],
@@ -115,6 +183,10 @@
             const path = args.path as string;
             return { name: path.split("/").pop(), path, note: null, ...(ATTACHMENTS[path] as object) };
           }
+          case "pty_spawn":
+            return shell.spawn(args.key, args.onEvent);
+          case "pty_write":
+            return shell.write(args.key, args.data);
           case "send_line": {
             const msg = JSON.parse(args.line);
             if (msg.type === "control_request") {
@@ -174,6 +246,7 @@
   }
 
   onMount(async () => {
+    if (scene === "terminal") return;
     if (scene === "setup") {
       const click = async (text: string) => {
         const btn = await waitFor(() =>

@@ -4,7 +4,26 @@
 // `layout`) para que dividir o mover no vuelva a montar sus componentes.
 import { Session } from "./session.svelte";
 
-export type Pane = { kind: "pane"; id: string; session: Session; cwd: string; resume?: string };
+/** Cómo abrir la interfaz de Claude (de `claude <args>` en la terminal, o al retomar tras actualizar). */
+export type Launch = { resume?: string; continue?: boolean; picker?: boolean; prompt?: string };
+
+/**
+ * Un panel es una terminal con el shell del usuario. Al escribir `claude`,
+ * el panel muestra la interfaz de la app (`mode: "claude"`) hasta /exit.
+ */
+export type Pane = {
+  kind: "pane";
+  id: string;
+  session: Session;
+  /** Directorio del shell (OSC 7), o el inicial. */
+  cwd: string;
+  /** Título que pone el shell o el programa que corre en la terminal. */
+  title: string;
+  mode: "shell" | "claude";
+  launch: Launch | null;
+  /** La función `claude` del shell espera respuesta al salir de la interfaz. */
+  waiting: boolean;
+};
 /** `row`: hijos lado a lado; `column`: uno sobre otro. */
 export type Split = { kind: "split"; id: string; dir: "row" | "column"; children: LayoutNode[]; sizes: number[] };
 export type LayoutNode = Pane | Split;
@@ -19,6 +38,11 @@ export type PaneApi = {
   addPaths(paths: string[]): void;
   pickFiles(): void;
   exportMd(): void;
+  /** Copia la selección de la terminal; false si no hay. */
+  copy(): boolean;
+  paste(text: string): void;
+  /** Ctrl+C en la interfaz de Claude; false si no aplica (p. ej. copiar). */
+  ctrlC(): boolean;
 };
 
 export type Direction = "left" | "right" | "up" | "down";
@@ -78,19 +102,33 @@ class Workspace {
     return panesOf(tab.root);
   }
 
-  private newPane(cwd: string, resume?: string): Pane {
+  private newPane(cwd: string, launch?: Launch): Pane {
     const id = String(++this.counter);
-    return { kind: "pane", id, session: new Session(`${this.label}:${id}`), cwd, resume };
+    return {
+      kind: "pane",
+      id,
+      session: new Session(`${this.label}:${id}`),
+      cwd,
+      title: "",
+      mode: launch ? "claude" : "shell",
+      launch: launch ?? null,
+      waiting: false,
+    };
+  }
+
+  /** Directorio actual de un panel: el de Claude si está abierto, si no el del shell. */
+  paneCwd(p: Pane | null): string {
+    if (!p) return this.home;
+    return (p.mode === "claude" && p.session.cwd) || p.cwd || this.home;
   }
 
   /** Directorio actual del panel enfocado, para abrir los nuevos ahí (como Konsole). */
   get cwd(): string {
-    const p = this.pane;
-    return p?.session.cwd || p?.cwd || this.home;
+    return this.paneCwd(this.pane);
   }
 
-  newTab(cwd = this.cwd, resume?: string) {
-    const p = this.newPane(cwd, resume);
+  newTab(cwd = this.cwd, launch?: Launch) {
+    const p = this.newPane(cwd, launch);
     this.tabs.push({ id: p.id, root: p, focus: p.id, zoomed: false });
     this.active = this.tabs.length - 1;
   }

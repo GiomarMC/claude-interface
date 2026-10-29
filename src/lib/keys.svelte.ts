@@ -24,7 +24,8 @@ export type Action =
   | "zoom_out"
   | "zoom_reset"
   | "export"
-  | "copy";
+  | "copy"
+  | "paste";
 
 export const ACTION_LABELS: [Action, string][] = [
   ["new_tab", "nueva pestaña"],
@@ -48,8 +49,9 @@ export const ACTION_LABELS: [Action, string][] = [
   ["zoom_in", "agrandar fuente"],
   ["zoom_out", "achicar fuente"],
   ["zoom_reset", "tamaño de fuente original"],
-  ["export", "exportar a .md"],
+  ["export", "exportar la conversación a .md"],
   ["copy", "copiar selección"],
+  ["paste", "pegar en la terminal"],
 ];
 
 const NAMED: Record<string, string> = {
@@ -139,3 +141,8 @@ class Keymap {
 }
 
 export const keymap = new Keymap();
+
+/** Tab o shift+tab; en Linux (GTK) shift+tab puede llegar como ISO_Left_Tab. */
+export function isTab(e: KeyboardEvent): boolean {
+  return e.key === "Tab" || e.key === "ISO_Left_Tab" || e.code === "Tab";
+}

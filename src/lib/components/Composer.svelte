@@ -1,6 +1,7 @@
 <script lang="ts">
   import { fmtBytes } from "$lib/format";
   import type { Attachment, Session, SlashCommand } from "$lib/session.svelte";
+  import { isTab } from "$lib/keys.svelte";
   import StatusLine from "./StatusLine.svelte";
 
   let {
@@ -9,12 +10,15 @@
     onsubmit,
     onattach,
     onpastepaths,
+    onexit,
   }: {
     s: Session;
     attachments: Attachment[];
     onsubmit: (text: string) => void;
     onattach: () => void;
     onpastepaths: (paths: string[]) => void;
+    /** Ctrl+D con el cuadro vacío: salir a la terminal, como el EOF del TUI. */
+    onexit?: () => void;
   } = $props();
 
   let text = $state("");
@@ -35,6 +39,26 @@
 
   export function focus() {
     el?.focus();
+  }
+
+  /** Ctrl+C del TUI: borra lo escrito. Devuelve false si no había nada. */
+  export function clear(): boolean {
+    if (text) text = "";
+    else if (attachments.length) attachments = [];
+    else return false;
+    historyPos = -1;
+    setTimeout(autosize);
+    return true;
+  }
+
+  let flashText = $state("");
+  let flashTimer: ReturnType<typeof setTimeout> | undefined;
+
+  /** Aviso pasajero bajo el cuadro, como "Press Ctrl-C again to exit". */
+  export function flash(msg: string, ms = 2000) {
+    flashText = msg;
+    clearTimeout(flashTimer);
+    if (msg) flashTimer = setTimeout(() => (flashText = ""), ms);
   }
 
   export function insert(t: string) {
@@ -97,7 +121,7 @@
         menuIndex = (menuIndex - 1 + matches.length) % matches.length;
         return e.preventDefault();
       }
-      if (e.key === "Tab") {
+      if (isTab(e) && !e.shiftKey) {
         complete(matches[menuIndex]);
         return e.preventDefault();
       }
@@ -113,9 +137,10 @@
     if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
       e.preventDefault();
       submit();
-    } else if (e.key === "Tab" && e.shiftKey) {
+    } else if (isTab(e)) {
+      // Como en la TUI: shift+tab cambia de modo y el cursor no sale del prompt.
       e.preventDefault();
-      s.cycleMode();
+      if (e.shiftKey) s.cycleMode();
     } else if (e.key === "Escape") {
       // Con Claude trabajando, el atajo global de la ventana interrumpe.
       if (!s.busy && text) text = "";
@@ -129,6 +154,9 @@
       historyPos--;
       text = historyPos >= 0 ? history[historyPos] : "";
       e.preventDefault();
+    } else if (e.ctrlKey && !e.shiftKey && e.key.toLowerCase() === "d" && text === "" && !attachments.length && !s.busy) {
+      e.preventDefault();
+      onexit?.();
     } else if (e.key === "Backspace" && text === "" && attachments.length) {
       attachments = attachments.slice(0, -1);
     }
@@ -227,12 +255,14 @@
   <StatusLine {s} />
 
   <div class="hints">
-    {#if modeInfo}
+    {#if flashText}
+      <span class="dim">{flashText}</span>
+    {:else if modeInfo}
       <button style:color={modeInfo.color} onclick={() => s.cycleMode()}>
         {modeInfo.label} <span class="faint">(shift+tab to cycle)</span>
       </button>
     {:else}
-      <button class="faint" onclick={() => s.cycleMode()}>? shift+tab: modos · / comandos · ↑ historial · esc interrumpir</button>
+      <button class="faint" onclick={() => s.cycleMode()}>? shift+tab: modos · / comandos · ↑ historial · esc o ctrl+c interrumpir</button>
     {/if}
   </div>
 </div>

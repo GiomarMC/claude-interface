@@ -1,6 +1,7 @@
 mod claude;
 mod files;
 mod keys;
+mod pty;
 mod setup;
 mod shell_env;
 mod terminal;
@@ -9,6 +10,12 @@ mod updates;
 use std::sync::Mutex;
 
 use tauri::Manager;
+
+/// Errores de la página en la terminal de `pnpm tauri dev` (ver app.html).
+#[tauri::command]
+fn log_js_error(message: String) {
+    eprintln!("[página] {message}");
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -23,11 +30,13 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(claude::Sessions(Mutex::new(Default::default())))
+        .manage(pty::Ptys(Mutex::new(Default::default())))
         .manage(setup::SetupTask(Mutex::new(None)))
         // Cada ventana tiene sus propias sesiones ("<ventana>:<panel>").
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::Destroyed = event {
                 claude::stop_window(&window.state::<claude::Sessions>(), window.label());
+                pty::kill_window(&window.state::<pty::Ptys>(), window.label());
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -50,6 +59,11 @@ pub fn run() {
             terminal::terminal_style,
             terminal::detected_terminals,
             keys::terminal_keys,
+            log_js_error,
+            pty::pty_spawn,
+            pty::pty_write,
+            pty::pty_resize,
+            pty::pty_kill,
             updates::install_kind,
             setup::claude_status,
             setup::install_claude,

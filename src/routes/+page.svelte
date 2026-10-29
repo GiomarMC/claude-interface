@@ -9,18 +9,14 @@
   import { writeText } from "@tauri-apps/plugin-clipboard-manager";
   import { prefs } from "$lib/prefs.svelte";
   import { updater, RESUME_KEY } from "$lib/updater.svelte";
-  import { keymap, type Action } from "$lib/keys.svelte";
-  import { ws, type Tab } from "$lib/workspace.svelte";
-  import Setup, { type ClaudeStatus } from "$lib/components/Setup.svelte";
+  import { isTab, keymap, type Action } from "$lib/keys.svelte";
+  import { ws, type Pane as PaneState, type Tab } from "$lib/workspace.svelte";
+  import { readText } from "@tauri-apps/plugin-clipboard-manager";
+  import UpdateBanner from "$lib/components/UpdateBanner.svelte";
   import Pane from "$lib/components/Pane.svelte";
 
   let dragging = $state(false);
   let area = $state<HTMLDivElement>();
-  /** Estado de Claude Code si hace falta el asistente de primer arranque. */
-  let setup = $state<ClaudeStatus | null>(null);
-  let setupDone: (() => void) | undefined;
-
-  const CWD_KEY = "ci.cwd";
   const win = getCurrentWindow();
   ws.label = win.label;
   const isMain = win.label === "main";
@@ -30,19 +26,8 @@
     (async () => {
       await prefs.load();
       ws.home = (await homeDir()).replace(/\/$/, "");
-
-      // Sin Claude Code instalado o sin sesión iniciada, primero el asistente.
-      const status = await invoke<ClaudeStatus>("claude_status");
-      if (!status.installed || status.loggedIn === false) {
-        setup = status;
-        await new Promise<void>((resolve) => (setupDone = resolve));
-      }
       // Ventanas abiertas con "nueva ventana": empiezan en el directorio del panel de origen.
       const fromWindow = new URLSearchParams(location.search).get("cwd");
-      let last: string | null = null;
-      try {
-        last = localStorage.getItem(CWD_KEY);
-      } catch {}
       // Tras instalar una actualización se retoma la conversación que estaba abierta.
       let resume: { sessionId: string; cwd: string } | null = null;
       if (isMain) {
@@ -51,8 +36,9 @@
           localStorage.removeItem(RESUME_KEY);
         } catch {}
       }
-      if (resume) ws.newTab(resume.cwd, resume.sessionId);
-      else ws.newTab(fromWindow ?? (await invoke<string | null>("initial_cwd")) ?? last ?? ws.home);
+      // Como una terminal: un shell en la carpeta pedida o en el home.
+      if (resume) ws.newTab(resume.cwd, { resume: resume.sessionId });
+      else ws.newTab(fromWindow ?? (await invoke<string | null>("initial_cwd")) ?? ws.home);
       if (isMain) updater.start(prefs.config.autoUpdate !== false);
 
       unlistenDrop = await getCurrentWebview().onDragDropEvent((e) => {
@@ -79,9 +65,16 @@
 
   const dirName = (cwd: string) => cwd.split(/[\\/]/).filter(Boolean).pop() || cwd;
 
+  /** Nombre de un panel para la pestaña y la ventana, como Konsole. */
+  function paneName(p: PaneState | null): string {
+    if (!p) return "";
+    const dir = dirName(ws.paneCwd(p));
+    return p.mode === "claude" ? `✻ ${dir}` : p.title || dir;
+  }
+
   $effect(() => {
-    const cwd = ws.pane?.session.cwd;
-    if (cwd) win.setTitle(`Claude · ${dirName(cwd)}`);
+    const name = paneName(ws.pane);
+    if (name) win.setTitle(name);
   });
 
   function newWindow() {
@@ -177,14 +170,23 @@
         prefs.zoom(0);
         return true;
       case "export":
+        if (pane?.mode !== "claude") return false;
         api?.exportMd();
         return true;
       case "copy": {
+        if (api?.copy()) return true;
         const text = window.getSelection()?.toString();
         if (!text) return false;
         writeText(text);
         return true;
       }
+      // En la interfaz de Claude se deja el pegado nativo (pega imágenes).
+      case "paste":
+        if (pane?.mode !== "shell") return false;
+        readText()
+          .then((text) => text && api?.paste(text))
+          .catch(() => {});
+        return true;
     }
     return false;
   }
@@ -192,7 +194,7 @@
   // Los atajos de la terminal van primero, como en un emulador: la app de
   // dentro (aquí, el cuadro de texto) solo recibe las teclas que no usa.
   function onKeyCapture(e: KeyboardEvent) {
-    if (setup || e.isComposing || !ws.tab) return;
+    if (e.isComposing || !ws.tab) return;
     const action = keymap.match(e);
     if (action && run(action)) {
       e.preventDefault();
@@ -200,13 +202,28 @@
     }
   }
 
+  // Teclas propias de la interfaz de Claude (en la terminal las recibe el shell).
   function onKey(e: KeyboardEvent) {
-    const s = ws.pane?.session;
-    if (!s) return;
-    if (e.key === "Escape" && s.busy && !s.permission) s.interrupt();
-    else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "o") {
+    if (ws.pane?.mode !== "claude") return;
+    const s = ws.pane.session;
+    const api = ws.api.get(ws.pane.id);
+    if (isTab(e) && !e.ctrlKey && !e.altKey && !e.metaKey) {
+      // Fuera del cuadro de texto, Tab no recorre los botones: shift+tab
+      // cambia de modo y el foco vuelve al prompt, como en la TUI.
+      if (e.defaultPrevented) return;
       e.preventDefault();
-      ws.api.get(ws.pane!.id)?.pickFiles();
+      if (e.shiftKey) s.cycleMode();
+      api?.focus();
+    } else if (e.key === "Escape" && s.busy && !s.permission) s.interrupt();
+    else if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key.toLowerCase() === "c") {
+      // Con texto seleccionado, Ctrl+C copia como siempre.
+      const el = document.activeElement as HTMLTextAreaElement | null;
+      const inField = !!el && typeof el.selectionStart === "number" && el.selectionStart !== el.selectionEnd;
+      if (inField || window.getSelection()?.toString()) return;
+      if (api?.ctrlC()) e.preventDefault();
+    } else if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "o") {
+      e.preventDefault();
+      api?.pickFiles();
     }
   }
 
@@ -236,17 +253,7 @@
 <svelte:window onkeydowncapture={onKeyCapture} onkeydown={onKey} />
 
 <main>
-  {#if setup}
-    <div class="scroll">
-      <Setup
-        status={setup}
-        onready={() => {
-          setup = null;
-          setupDone?.();
-        }}
-      />
-    </div>
-  {:else}
+    <UpdateBanner busy={ws.allPanes.some(({ pane }) => pane.session.busy)} oninstall={() => updater.install(ws.pane?.mode === "claude" ? ws.pane.session.sessionId : null, ws.cwd)} />
     {#if ws.tabs.length > 1 || ws.tab?.zoomed}
       <nav class="tabs" aria-label="Pestañas">
         {#each ws.tabs as tab, i (tab.id)}
@@ -259,10 +266,10 @@
             class:active={i === ws.active}
             onclick={() => ws.gotoTab(i)}
             onauxclick={(e) => e.button === 1 && closeTab(i)}
-            title={focused.session.cwd}
+            title={ws.paneCwd(focused)}
           >
             <span class="num">{i + 1}</span>
-            <span class="name">{dirName(focused.session.cwd || focused.cwd)}</span>
+            <span class="name">{paneName(focused)}</span>
             {#if panes.length > 1}<span class="faint">[{panes.length}]</span>{/if}
             {#if tab.zoomed}<span class="faint">[Z]</span>{/if}
             {#if waiting}<span class="warn">!</span>{:else if busy}<span class="claude">✻</span>{/if}
@@ -303,13 +310,17 @@
         {/each}
       {/if}
     </div>
-  {/if}
 
   {#if dragging}
     <div class="drop">
       <div class="drop-box">
-        <div class="claude bold">✻ Suelta para adjuntar</div>
-        <div class="dim">texto → se incluye el contenido · imágenes/PDF → se envían directo · carpetas → por ruta</div>
+        {#if ws.pane?.mode === "claude"}
+          <div class="claude bold">✻ Suelta para adjuntar</div>
+          <div class="dim">texto → se incluye el contenido · imágenes/PDF → se envían directo · carpetas → por ruta</div>
+        {:else}
+          <div class="claude bold">Suelta para pegar la ruta</div>
+          <div class="dim">como en tu terminal · escribe <span class="claude">claude</span> para adjuntar contenidos</div>
+        {/if}
       </div>
     </div>
   {/if}

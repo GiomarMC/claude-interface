@@ -56,6 +56,7 @@ const LOCAL_COMMANDS: SlashCommand[] = [
   { name: "resume", description: "Retoma una conversación anterior", local: true },
   { name: "cd", description: "Cambia el directorio de trabajo", local: true },
   { name: "export", description: "Exporta la conversación a Markdown", local: true },
+  { name: "exit", description: "Cierra Claude y vuelve a la terminal (también ctrl+d)", local: true },
   { name: "keys", description: "Atajos de pestañas, divisiones y ventanas (los de tu terminal)", local: true },
   { name: "model", description: "Cambia el modelo (opus, sonnet, haiku…)", argumentHint: "<modelo>", local: true },
   { name: "effort", description: "Cambia el nivel de esfuerzo", argumentHint: "low|medium|high|xhigh|max", local: true },

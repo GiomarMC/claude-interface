@@ -35,6 +35,8 @@ export type TerminalStyle = {
   background?: string | null;
   foreground?: string | null;
   palette: string[];
+  cursorShape?: "block" | "bar" | "underline" | null;
+  cursorBlink?: boolean | null;
 };
 
 type Config = {

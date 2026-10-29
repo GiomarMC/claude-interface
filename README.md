@@ -4,7 +4,7 @@
 
 # Claude Interface
 
-Interfaz de escritorio para [Claude Code](https://docs.claude.com/en/docs/claude-code) con el look de la TUI, pero con la interacción de una app gráfica.
+Terminal de escritorio con [Claude Code](https://docs.claude.com/en/docs/claude-code) integrado: tu shell de siempre y, al escribir `claude`, una interfaz con el look de la TUI pero con la interacción de una app gráfica.
 
 [![Última versión](https://img.shields.io/github/v/release/GiomarMC/claude-interface?label=versi%C3%B3n&color=d77757)](https://github.com/GiomarMC/claude-interface/releases/latest)
 [![Descargas](https://img.shields.io/github/downloads/GiomarMC/claude-interface/total?label=descargas&color=4eba65)](https://github.com/GiomarMC/claude-interface/releases)
@@ -83,7 +83,13 @@ Imágenes (con miniatura), PDF y carpetas se adjuntan arrastrándolos, con `Ctrl
 
 ## ¿Qué es?
 
+Es una terminal: cada pestaña y cada panel abre tu shell (zsh, bash, fish o PowerShell, con tu configuración, prompt y alias), y ahí haces lo de siempre: `cd`, `git`, `vim`, `htop`… Al escribir `claude` en un panel, ese panel pasa a la interfaz de Claude en esa carpeta; con `/exit` (o `Ctrl+D` con el cuadro vacío) vuelves al shell, en la carpeta donde quedó Claude. `claude -c`, `claude --resume [id]` y `claude "prompt"` también abren la interfaz; los subcomandos y otras opciones (`claude mcp`, `claude -p …`) ejecutan el Claude Code normal, y `command claude` siempre abre el TUI.
+
 No reemplaza a Claude Code: lanza tu `claude` instalado en modo `stream-json`, así que usa tu cuenta, tu `settings.json`, tus skills, MCP, `CLAUDE.md` y tus sesiones. Se puede abrir en un directorio concreto: `claude-interface ~/mi-proyecto`.
+
+La integración con el shell se carga después de tu configuración (`.zshrc`, `.bashrc`, `config.fish` o el perfil de PowerShell) sin modificarla: solo define la función `claude` e informa la carpeta actual a la app. Si por algún motivo la app no recibe el aviso de `claude`, a los 2 segundos se abre el Claude Code normal en la terminal, así nunca queda esperando.
+
+En Windows se abre PowerShell 7 si está instalado (si no, el Windows PowerShell del sistema), en UTF-8 y con la política de ejecución relajada solo para esa ventana, así que tu perfil y tus comandos funcionan aunque los scripts estén bloqueados en el sistema. El estilo por defecto es Breeze (los colores de Konsole) con Cascadia Mono; `/terminal windows-terminal` usa el de tu Windows Terminal.
 
 ## Se adapta a cada usuario
 
@@ -98,7 +104,7 @@ No reemplaza a Claude Code: lanza tu `claude` instalado en modo `stream-json`, a
 - **Adjuntar archivos** arrastrándolos, con `Ctrl+O` o pegándolos desde el gestor de archivos. El contenido de los archivos de texto va directo en el mensaje (sin gastar llamadas de búsqueda/lectura); imágenes y PDF se envían directamente; archivos grandes y carpetas se pasan por ruta.
 - **Pegar imágenes** del portapapeles con `Ctrl+V`.
 - **Copiar** cada respuesta como Markdown y cada bloque de código con un clic.
-- **Pestañas, paneles divididos y ventanas** como en tu terminal, cada uno con su propia sesión de Claude Code. Los atajos son los de tu emulador (Konsole, GNOME Terminal, kitty, Alacritty, Ghostty y foot en Linux; Windows Terminal y Alacritty en Windows; iTerm2, Terminal.app, kitty, Ghostty y Alacritty en macOS), incluidos los que hayas cambiado en su configuración; lo que tu terminal no tenga usa los habituales del sistema (en macOS, con `Cmd`). Si abres la app desde una terminal, usa los de esa. En Konsole, por ejemplo: `Ctrl+Shift+T` pestaña, `Ctrl+(` / `Ctrl+)` dividir, `Ctrl+Shift+←/→/↑/↓` cambiar de panel, `Shift+←/→` cambiar de pestaña, `Ctrl+Shift+E` maximizar, `Ctrl+Shift+W` cerrar y `Ctrl+Shift+N` nueva ventana. `/keys` muestra los tuyos; los separadores se arrastran para cambiar el tamaño.
+- **Pestañas, paneles divididos y ventanas** como en tu terminal, cada uno con su propio shell (y su propia sesión de Claude cuando la abres). Al cerrar el shell (`exit`) se cierra el panel; arrastrar archivos a la terminal pega sus rutas. Los atajos son los de tu emulador (Konsole, GNOME Terminal, kitty, Alacritty, Ghostty y foot en Linux; Windows Terminal y Alacritty en Windows; iTerm2, Terminal.app, kitty, Ghostty y Alacritty en macOS), incluidos los que hayas cambiado en su configuración; lo que tu terminal no tenga usa los habituales del sistema (en macOS, con `Cmd`). Si abres la app desde una terminal, usa los de esa. En Konsole, por ejemplo: `Ctrl+Shift+T` pestaña, `Ctrl+(` / `Ctrl+)` dividir, `Ctrl+Shift+←/→/↑/↓` cambiar de panel, `Shift+←/→` o `Ctrl+Tab` cambiar de pestaña, `Ctrl+Shift+C`/`Ctrl+Shift+V` copiar y pegar, `Ctrl+Shift+E` maximizar, `Ctrl+Shift+W` cerrar y `Ctrl+Shift+N` nueva ventana. `/keys` muestra los tuyos; los separadores se arrastran para cambiar el tamaño.
 - **Exportar** la conversación a `.md` (`/export` o el atajo de guardar salida de tu terminal, `Ctrl+Shift+S` en Konsole).
 - **Permisos** con el mismo diálogo de la TUI (1/2/3, ↑/↓, Esc), `AskUserQuestion` y aprobación de planes.
 - **Modos** con `Shift+Tab`: normal, accept edits, plan, auto, bypass.
@@ -129,10 +135,12 @@ El workflow necesita los secrets `TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PR
 
 - `src-tauri/src/claude.rs`: lanza `claude -p --input-format stream-json --output-format stream-json --permission-prompt-tool stdio` y reenvía cada línea a la UI.
 - `src-tauri/src/files.rs`: lectura de adjuntos, info de git, settings combinados, statusline, historial de sesiones (`~/.claude/projects`), shell local.
-- `src-tauri/src/terminal.rs`: lectura de la configuración de los emuladores de terminal.
+- `src-tauri/src/pty.rs`: pseudo-terminal con el shell del usuario y su integración (función `claude`, OSC 633/7); en la página la dibuja xterm.js (`Terminal.svelte`).
+- `src-tauri/src/terminal.rs` y `keys.rs`: colores, fuente y atajos de los emuladores de terminal.
 - `src/lib/session.svelte.ts`: estado de la sesión e interpretación del protocolo.
 - `src/lib/prefs.svelte.ts`: tema, fuente y estilo de terminal.
 - `src/lib/updater.svelte.ts` y `src-tauri/src/updates.rs`: actualizaciones (plugin de Tauri y paquetes .rpm/.deb).
+- `src/lib/workspace.svelte.ts`: pestañas y paneles divididos; `Pane.svelte` alterna entre la terminal y la interfaz de Claude (`Chat.svelte`).
 - `src/lib/components/`: transcripción, herramientas, permisos, prompt y statusline.
 
 La configuración propia de la app (fuente, tema o terminal forzados) se guarda en `config.json` dentro del directorio de configuración de la app (`~/.config/dev.giomarmc.claudeinterface/` en Linux).

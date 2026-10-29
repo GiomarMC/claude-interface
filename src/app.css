@@ -36,9 +36,12 @@
   --hl-variable: #e06c75;
   --hl-meta: #56b6c2;
 
+  /* Las Nerd Fonts dan los íconos de prompts como powerlevel10k o starship
+     aunque la fuente principal no los tenga (las terminales hacen lo mismo). */
   --font-fallback: ui-monospace, "SF Mono", Menlo, "Cascadia Mono", Consolas,
-    "DejaVu Sans Mono", "Liberation Mono", "Noto Color Emoji", "Apple Color Emoji",
-    "Segoe UI Emoji", monospace;
+    "DejaVu Sans Mono", "Liberation Mono", "Symbols Nerd Font Mono", "Symbols Nerd Font",
+    "MesloLGS NF", "MesloLGS Nerd Font Mono", "MesloLGS Nerd Font", "JetBrainsMono Nerd Font", "FiraCode Nerd Font",
+    "Hack Nerd Font", "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", monospace;
   --font: var(--font-fallback);
   --font-size: 14px;
   --line: 1.45;

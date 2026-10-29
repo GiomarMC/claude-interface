@@ -24,6 +24,9 @@ pub struct TerminalStyle {
     foreground: Option<String>,
     /// 16 colores: 0–7 normales, 8–15 brillantes. Vacío si no se encontró.
     palette: Vec<String>,
+    /// "block", "bar" o "underline".
+    cursor_shape: Option<String>,
+    cursor_blink: Option<bool>,
 }
 
 pub const TERMINALS: &[&str] = &[
@@ -155,6 +158,13 @@ fn konsole() -> Option<TerminalStyle> {
     let mut parts = font.split(',');
     style.font_family = parts.next().map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
     style.font_size = parts.next().and_then(|s| s.trim().parse().ok());
+
+    style.cursor_shape = match ini_get(&profile, "Cursor Options", "CursorShape") {
+        Some("1") => Some("bar".into()),
+        Some("2") => Some("underline".into()),
+        _ => Some("block".into()),
+    };
+    style.cursor_blink = Some(ini_get(&profile, "Terminal Features", "BlinkingCursorEnabled") == Some("true"));
 
     let scheme = ini_get(&profile, "Appearance", "ColorScheme").unwrap_or("Breeze").to_string();
     style.profile = Some(match &profile_name {
@@ -578,6 +588,25 @@ fn mac_terminal(name: &str, installed: bool) -> Option<TerminalStyle> {
     installed.then(|| TerminalStyle { terminal: name.into(), ..Default::default() })
 }
 
+// ── Estilo por defecto en Windows ───────────────────────────────────
+
+/// La consola de Windows no tiene un estilo que valga la pena imitar: en
+/// modo automático se usa este, con los colores Breeze de Konsole, Cascadia
+/// Mono y cursor de barra. `/terminal windows-terminal` usa el de Windows Terminal.
+fn windows_default() -> TerminalStyle {
+    let mut style = TerminalStyle {
+        terminal: "default".into(),
+        profile: Some("Breeze".into()),
+        font_family: Some("Cascadia Mono".into()),
+        font_size: Some(11.0),
+        cursor_shape: Some("bar".into()),
+        cursor_blink: Some(false),
+        ..Default::default()
+    };
+    breeze(&mut style);
+    style
+}
+
 // ── Selección ───────────────────────────────────────────────────────
 
 pub(crate) fn read(name: &str) -> Option<TerminalStyle> {
@@ -639,7 +668,9 @@ pub(crate) fn auto_order() -> Vec<&'static str> {
 /// `which`: "auto" o el nombre de una terminal concreta.
 #[tauri::command]
 pub async fn terminal_style(which: String) -> Option<TerminalStyle> {
-    let mut style = if which == "auto" {
+    let mut style = if which == "auto" && cfg!(windows) {
+        Some(windows_default())
+    } else if which == "auto" {
         auto_order().into_iter().find_map(read)
     } else {
         read(&which)

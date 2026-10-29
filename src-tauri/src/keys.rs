@@ -48,6 +48,8 @@ fn key_name(tok: &str) -> String {
         "pgup" | "page_up" | "prior" => "pageup",
         "return" | "kp_enter" => "enter",
         "esc" => "escape",
+        "ins" => "insert",
+        "del" => "delete",
         "plus" | "kp_add" => "+",
         "minus" | "kp_subtract" => "-",
         "equal" | "equals" => "=",
@@ -172,6 +174,7 @@ fn os_defaults() -> Binds {
         add(&mut b, "zoom_out", &["meta+-"]);
         add(&mut b, "zoom_reset", &["meta+0"]);
         add(&mut b, "export", &["meta+s"]);
+        add(&mut b, "paste", &["meta+v"]);
     } else {
         add(&mut b, "new_tab", &["ctrl+shift+t"]);
         add(&mut b, "close_pane", &["ctrl+shift+w"]);
@@ -194,6 +197,7 @@ fn os_defaults() -> Binds {
         add(&mut b, "zoom_reset", &["ctrl+0"]);
         add(&mut b, "export", &["ctrl+shift+s"]);
         add(&mut b, "copy", &["ctrl+shift+c"]);
+        add(&mut b, "paste", &["ctrl+shift+v"]);
     }
     b
 }
@@ -223,6 +227,7 @@ const KONSOLE_ACTIONS: &[(&str, &str)] = &[
     ("reset-font-size", "zoom_reset"),
     ("file_save_as", "export"),
     ("edit_copy", "copy"),
+    ("edit_paste", "paste"),
 ];
 
 fn konsole() -> Binds {
@@ -230,8 +235,9 @@ fn konsole() -> Binds {
     add(&mut b, "new_tab", &["Ctrl+Shift+T"]);
     add(&mut b, "new_window", &["Ctrl+Shift+N"]);
     add(&mut b, "close_pane", &["Ctrl+Shift+W", "Ctrl+Shift+X"]);
-    add(&mut b, "next_tab", &["Shift+Right", "Ctrl+PgDown"]);
-    add(&mut b, "prev_tab", &["Shift+Left", "Ctrl+PgUp"]);
+    // Ctrl+Tab es "última pestaña usada" en Konsole; con dos pestañas es lo mismo.
+    add(&mut b, "next_tab", &["Shift+Right", "Ctrl+PgDown", "Ctrl+Tab"]);
+    add(&mut b, "prev_tab", &["Shift+Left", "Ctrl+PgUp", "Ctrl+Shift+Tab"]);
     add(&mut b, "move_tab_left", &["Ctrl+Alt+Left"]);
     add(&mut b, "move_tab_right", &["Ctrl+Alt+Right"]);
     digits(&mut b, "Alt+", 9);
@@ -247,6 +253,7 @@ fn konsole() -> Binds {
     add(&mut b, "zoom_reset", &["Ctrl+0"]);
     add(&mut b, "export", &["Ctrl+Shift+S"]);
     add(&mut b, "copy", &["Ctrl+Shift+C"]);
+    add(&mut b, "paste", &["Ctrl+Shift+V", "Shift+Ins"]);
 
     // Atajos cambiados por el usuario (KXMLGUI): <Action name="…" shortcut="A; B"/>
     let Some(base) = home_dir().map(|h| h.join(".local/share/kxmlgui5/konsole")) else { return b };
@@ -310,6 +317,7 @@ fn gnome_terminal() -> Binds {
             ("zoom-normal", _) => "zoom_reset".into(),
             ("save-contents", _) => "export".into(),
             ("copy", _) => "copy".into(),
+            ("paste", _) => "paste".into(),
             _ => continue,
         };
         b.insert(action, parse_gtk(value).into_iter().collect());
@@ -353,6 +361,7 @@ fn kitty_action(cmd: &str) -> Option<String> {
                 _ => "zoom_reset",
             },
             "copy_to_clipboard" => "copy",
+            "paste_from_clipboard" => "paste",
             _ => return None,
         }
         .to_string(),
@@ -423,6 +432,7 @@ fn kitty() -> Binds {
             ("kitty_mod+minus", "change_font_size all -2.0"),
             ("kitty_mod+backspace", "change_font_size all 0"),
             ("kitty_mod+c", "copy_to_clipboard"),
+            ("kitty_mod+v", "paste_from_clipboard"),
         ];
         for (k, c) in defaults {
             put(&mut b, k, c);
@@ -442,6 +452,7 @@ fn kitty() -> Binds {
                 ("cmd+minus", "change_font_size all -2.0".into()),
                 ("cmd+0", "change_font_size all 0".into()),
                 ("cmd+c", "copy_to_clipboard".into()),
+                ("cmd+v", "paste_from_clipboard".into()),
             ];
             for (k, c) in &mac {
                 put(&mut b, k, c);
@@ -467,11 +478,13 @@ fn alacritty() -> Binds {
         add(&mut b, "zoom_out", &["cmd+-"]);
         add(&mut b, "zoom_reset", &["cmd+0"]);
         add(&mut b, "copy", &["cmd+c"]);
+        add(&mut b, "paste", &["cmd+v"]);
     } else {
         add(&mut b, "zoom_in", &["ctrl+=", "ctrl++"]);
         add(&mut b, "zoom_out", &["ctrl+-"]);
         add(&mut b, "zoom_reset", &["ctrl+0"]);
         add(&mut b, "copy", &["ctrl+shift+c"]);
+        add(&mut b, "paste", &["ctrl+shift+v"]);
     }
     let Some(path) = alacritty_conf() else { return b };
     let Some(doc) = fs::read_to_string(path).ok().and_then(|t| t.parse::<toml::Table>().ok()) else {
@@ -496,6 +509,7 @@ fn alacritty() -> Binds {
             "decreasefontsize" => "zoom_out",
             "resetfontsize" => "zoom_reset",
             "copy" => "copy",
+            "paste" => "paste",
             _ => continue,
         };
         let mods: Vec<&str> = entry
@@ -545,6 +559,7 @@ fn ghostty_action(cmd: &str) -> Option<String> {
             "decrease_font_size" => "zoom_out",
             "reset_font_size" => "zoom_reset",
             "copy_to_clipboard" => "copy",
+            "paste_from_clipboard" => "paste",
             _ => return None,
         }
         .to_string(),
@@ -586,6 +601,7 @@ fn ghostty() -> Binds {
             ("cmd+minus", "decrease_font_size:1"),
             ("cmd+0", "reset_font_size"),
             ("cmd+c", "copy_to_clipboard"),
+            ("cmd+v", "paste_from_clipboard"),
         ]
         .iter()
         .map(|(k, c)| (k.to_string(), c.to_string()))
@@ -615,6 +631,7 @@ fn ghostty() -> Binds {
             ("ctrl+minus", "decrease_font_size:1"),
             ("ctrl+0", "reset_font_size"),
             ("ctrl+shift+c", "copy_to_clipboard"),
+            ("ctrl+shift+v", "paste_from_clipboard"),
         ]
         .iter()
         .map(|(k, c)| (k.to_string(), c.to_string()))
@@ -653,6 +670,7 @@ fn foot() -> Binds {
     add(&mut b, "zoom_out", &["ctrl+-"]);
     add(&mut b, "zoom_reset", &["ctrl+0"]);
     add(&mut b, "copy", &["ctrl+shift+c"]);
+    add(&mut b, "paste", &["ctrl+shift+v"]);
     let Some(text) = config_home().and_then(|c| fs::read_to_string(c.join("foot/foot.ini")).ok()) else {
         return b;
     };
@@ -666,6 +684,7 @@ fn foot() -> Binds {
             "font-decrease" => "zoom_out",
             "font-reset" => "zoom_reset",
             "clipboard-copy" => "copy",
+            "clipboard-paste" => "paste",
             _ => continue,
         };
         let keys = if value == "none" {
@@ -721,6 +740,7 @@ fn wt_action(cmd: &serde_json::Value) -> Option<String> {
             }
             "resetFontSize" => "zoom_reset",
             "copy" => "copy",
+            "paste" => "paste",
             _ => return None,
         }
         .to_string(),
@@ -745,6 +765,7 @@ fn windows_terminal() -> Binds {
     add(&mut b, "zoom_out", &["ctrl+-"]);
     add(&mut b, "zoom_reset", &["ctrl+0"]);
     add(&mut b, "copy", &["ctrl+shift+c"]);
+    add(&mut b, "paste", &["ctrl+shift+v", "ctrl+v"]);
 
     let Some(local) = std::env::var_os("LOCALAPPDATA").map(std::path::PathBuf::from) else { return b };
     let Some(text) = [
@@ -919,6 +940,7 @@ fn iterm2() -> Binds {
     add(&mut b, "zoom_out", &["cmd+-"]);
     add(&mut b, "zoom_reset", &["cmd+0"]);
     add(&mut b, "copy", &["cmd+c"]);
+    add(&mut b, "paste", &["cmd+v"]);
     apply_mac_shortcuts(
         &mut b,
         "com.googlecode.iterm2",
@@ -945,6 +967,7 @@ fn iterm2() -> Binds {
             ("Make Text Normal Size", "zoom_reset"),
             ("Save Contents…", "export"),
             ("Copy", "copy"),
+            ("Paste", "paste"),
         ],
     );
     b
@@ -963,6 +986,7 @@ fn terminal_app() -> Binds {
     add(&mut b, "zoom_reset", &["cmd+0"]);
     add(&mut b, "export", &["cmd+s"]);
     add(&mut b, "copy", &["cmd+c"]);
+    add(&mut b, "paste", &["cmd+v"]);
     apply_mac_shortcuts(
         &mut b,
         "com.apple.Terminal",
@@ -978,6 +1002,7 @@ fn terminal_app() -> Binds {
             ("Default Font Size", "zoom_reset"),
             ("Export Text As…", "export"),
             ("Copy", "copy"),
+            ("Paste", "paste"),
         ],
     );
     b
