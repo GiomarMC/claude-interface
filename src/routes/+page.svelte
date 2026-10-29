@@ -276,7 +276,7 @@
           </div>
           <div class="info">
             <div class="bold">¡Bienvenido de vuelta!</div>
-            <div class="dim">{modelName(s.model) || s.modelPref || "—"} · {s.effort || "effort por defecto"}</div>
+            <div class="dim">{modelName(s.model) || s.modelPref || "modelo por defecto"} · {s.effort || "effort por defecto"}</div>
             <button class="cwd" onclick={changeDir} title="Cambiar directorio">{shortPath(s.cwd, s.home)}</button>
           </div>
           <div class="tips">

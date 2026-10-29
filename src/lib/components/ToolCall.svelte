@@ -58,7 +58,7 @@
         return `Updated ${relPath(input.file_path, cwd)}${parts.length ? " with " + parts.join(" and ") : ""}`;
       }
       case "Write": {
-        const n = String(input.content ?? "").split("\n").length;
+        const n = String(input.content ?? "").replace(/\n$/, "").split("\n").length;
         return `Wrote ${n} lines to ${relPath(input.file_path, cwd)}`;
       }
       case "Glob":
@@ -85,13 +85,13 @@
   const status = $derived(!item.result ? "pending" : item.result.isError ? "error" : "done");
   const arg = $derived(toolArg(item.name, item.input, cwd));
   const writePreview = $derived(
-    item.name === "Write" ? String(item.input.content ?? "").split("\n") : [],
+    item.name === "Write" ? String(item.input.content ?? "").replace(/\n$/, "").split("\n") : [],
   );
 </script>
 
 <div class="tool">
   <div class="head">
-    <span class="bullet {status}">⏺</span>
+    <span class="bullet {status}">●</span>
     <span class="title bold">{toolTitle(item.name)}</span>{#if arg}<span class="arg">({arg})</span>{/if}
   </div>
 
@@ -197,11 +197,11 @@
   }
   .bullet.pending {
     color: var(--text-dim);
-    animation: blink 1s steps(2, start) infinite;
+    animation: pulse 1.2s ease-in-out infinite;
   }
-  @keyframes blink {
-    to {
-      visibility: hidden;
+  @keyframes pulse {
+    50% {
+      opacity: 0.3;
     }
   }
   .body {
@@ -219,8 +219,10 @@
   }
   .out {
     min-width: 0;
-    white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+  .ol {
+    white-space: pre-wrap;
   }
   .more {
     color: var(--text-faint);

@@ -20,7 +20,7 @@
   <div class="user">
     <span class="prompt">&gt;</span>
     <div class="utext">
-      {item.text}
+      <span class="ut">{item.text}</span>
       {#if item.attachments.length}
         <div class="chips">
           {#each item.attachments as a}
@@ -35,7 +35,7 @@
   </div>
 {:else if item.kind === "text"}
   <div class="assistant">
-    <span class="bullet">⏺</span>
+    <span class="bullet">●</span>
     <div class="md">{@html renderMarkdown(item.text)}</div>
     <button class="copy" onclick={() => copy(item.text)} title="Copiar como Markdown">
       {copied ? "✓ copiado" : "⧉ copiar"}
@@ -72,8 +72,10 @@
   .prompt {
     flex: none;
   }
-  .utext {
+  .ut {
     white-space: pre-wrap;
+  }
+  .utext {
     overflow-wrap: anywhere;
     min-width: 0;
     color: var(--text);

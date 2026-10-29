@@ -474,7 +474,7 @@ export class Session {
 
   private countLines(name: string, input: any, meta: any) {
     if (name === "Write") {
-      this.linesAdded += String(input?.content ?? "").split("\n").length;
+      this.linesAdded += String(input?.content ?? "").replace(/\n$/, "").split("\n").length;
     } else if (name === "Edit" || name === "MultiEdit") {
       for (const h of meta?.structuredPatch ?? []) {
         for (const l of h.lines ?? []) {
@@ -610,7 +610,7 @@ export class Session {
       } else if (it.kind === "text") {
         out.push(it.text, "");
       } else if (it.kind === "tool") {
-        out.push(`\`⏺ ${it.name}(${toolArg(it.name, it.input, this.cwd)})\``, "");
+        out.push(`\`● ${it.name}(${toolArg(it.name, it.input, this.cwd)})\``, "");
       } else if (it.kind === "system") {
         out.push(`*${it.text}*`, "");
       }
