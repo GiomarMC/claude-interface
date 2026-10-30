@@ -1,6 +1,6 @@
 [package]
 name = "claude-interface"
-version = "0.1.7"
+version = "0.1.8"
 description = "Interfaz de escritorio para Claude Code"
 authors = ["GiomarMC"]
 edition = "2024"
