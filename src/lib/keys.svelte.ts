@@ -8,6 +8,8 @@ export type Action =
   | "new_window"
   | "next_tab"
   | "prev_tab"
+  | "last_tab"
+  | "last_tab_reverse"
   | "move_tab_left"
   | "move_tab_right"
   | `goto_tab_${number}`
@@ -33,6 +35,8 @@ export const ACTION_LABELS: [Action, string][] = [
   ["close_tab", "cerrar pestaña"],
   ["next_tab", "pestaña siguiente"],
   ["prev_tab", "pestaña anterior"],
+  ["last_tab", "última pestaña usada"],
+  ["last_tab_reverse", "última pestaña usada (al revés)"],
   ["move_tab_left", "mover pestaña a la izquierda"],
   ["move_tab_right", "mover pestaña a la derecha"],
   ["goto_tab_1", "ir a la pestaña 1 (…9)"],

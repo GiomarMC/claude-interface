@@ -31,10 +31,19 @@ pub struct StartOptions {
     resume: Option<String>,
 }
 
+/// `pid` distingue las líneas de un proceso que se reemplazó (al reiniciar
+/// la sesión) de las del nuevo, que comparte `key`.
 #[derive(Clone, Serialize)]
 struct EventPayload {
     key: String,
+    pid: u32,
     line: String,
+}
+
+#[derive(Clone, Serialize)]
+struct ExitPayload {
+    key: String,
+    pid: u32,
 }
 
 const CLAUDE_EXE: &str = if cfg!(windows) { "claude.exe" } else { "claude" };
@@ -111,7 +120,7 @@ pub fn start_session(
     app: AppHandle,
     state: State<Sessions>,
     opts: StartOptions,
-) -> Result<(), String> {
+) -> Result<u32, String> {
     stop(&state, &opts.key);
 
     let mut cmd = crate::shell_env::command(find_claude());
@@ -156,6 +165,7 @@ pub fn start_session(
     let stdin = child.stdin.take().ok_or("sin stdin")?;
     let stdout = child.stdout.take().ok_or("sin stdout")?;
     let stderr = child.stderr.take().ok_or("sin stderr")?;
+    let pid = child.id();
 
     let key = opts.key.clone();
     let out_app = app.clone();
@@ -167,10 +177,10 @@ pub fn start_session(
             }
             let _ = out_app.emit(
                 "claude-event",
-                EventPayload { key: key.clone(), line },
+                EventPayload { key: key.clone(), pid, line },
             );
         }
-        let _ = out_app.emit("claude-exit", key);
+        let _ = out_app.emit("claude-exit", ExitPayload { key, pid });
     });
 
     let key = opts.key.clone();
@@ -179,7 +189,7 @@ pub fn start_session(
             let Ok(line) = line else { break };
             let _ = app.emit(
                 "claude-stderr",
-                EventPayload { key: key.clone(), line },
+                EventPayload { key: key.clone(), pid, line },
             );
         }
     });
@@ -189,7 +199,7 @@ pub fn start_session(
         .lock()
         .unwrap()
         .insert(opts.key, Session { child, stdin });
-    Ok(())
+    Ok(pid)
 }
 
 /// `claude --version` → "2.1.312"

@@ -80,6 +80,13 @@ class Workspace {
   home = $state("");
   tabs = $state<Tab[]>([]);
   active = $state(0);
+  /**
+   * Ids de panel del más al menos usado, de todas las pestañas: como el
+   * historial de vistas de Konsole (ViewManager::_terminalDisplayHistory).
+   */
+  private history: string[] = [];
+  /** Posición en `history` mientras se recorre con Ctrl+Tab (-1: sin recorrer). */
+  private historyIndex = -1;
   /** Funciones de cada panel montado, para atajos y arrastrar archivos. */
   api = new Map<string, PaneApi>();
   private counter = 0;
@@ -171,20 +178,37 @@ class Workspace {
       if (!grand) tab.root = only;
       else grand.children[grand.children.findIndex((c) => c.id === parent.id)] = only;
     }
+    this.forget([id]);
     if (tab.focus === id) {
-      const sibling = parent.children[Math.max(0, i - 1)] ?? parent.children[0];
-      tab.focus = panesOf(findNode(tab.root, sibling.id) ?? tab.root)[0].id;
+      // Como Konsole: el panel de la pestaña usado más recientemente.
+      const left = panesOf(tab.root).map((p) => p.id);
+      tab.focus = this.history.find((h) => left.includes(h)) ?? left[0];
     }
     tab.zoomed = false;
     return true;
   }
 
   closeTab(index = this.active): boolean {
-    this.tabs.splice(index, 1);
+    const [closed] = this.tabs.splice(index, 1);
     if (!this.tabs.length) return false;
+    const wasActive = index === this.active;
     if (this.active >= index && this.active > 0) this.active--;
     this.active = Math.min(this.active, this.tabs.length - 1);
+    this.forget(panesOf(closed.root).map((p) => p.id));
+    // Al cerrar la pestaña actual se vuelve al último panel usado, como Konsole.
+    if (wasActive && this.history.length) this.focusPane(this.history[0]);
     return true;
+  }
+
+  private forget(ids: string[]) {
+    this.endLastUsed();
+    this.history = this.history.filter((h) => !ids.includes(h));
+  }
+
+  /** El panel enfocado pasa a ser el más reciente (salvo mientras se recorre el historial). */
+  noteFocus(id: string) {
+    if (this.historyIndex !== -1) return;
+    this.history = [id, ...this.history.filter((h) => h !== id)];
   }
 
   gotoTab(index: number) {
@@ -194,6 +218,31 @@ class Workspace {
   cycleTab(delta: number) {
     const n = this.tabs.length;
     this.active = (this.active + delta + n) % n;
+  }
+
+  /**
+   * "Last Used Tabs" de Konsole (Ctrl+Tab): va al panel usado antes del
+   * actual, en esta u otra pestaña; mientras se mantenga Ctrl, cada pulsación
+   * va uno más atrás. Al soltar Ctrl (`endLastUsed`) el elegido pasa a ser
+   * el más reciente.
+   */
+  lastUsedPane(reverse = false) {
+    const all = this.allPanes.map(({ pane }) => pane.id);
+    this.history = [...this.history.filter((h) => all.includes(h)), ...all.filter((id) => !this.history.includes(id))];
+    const n = this.history.length;
+    if (n <= 1) return;
+    if (this.historyIndex === -1) this.historyIndex = reverse ? n - 1 : 1;
+    else if (reverse) this.historyIndex = this.historyIndex === 0 ? n - 1 : this.historyIndex - 1;
+    else this.historyIndex = this.historyIndex >= n - 1 ? 0 : this.historyIndex + 1;
+    this.focusPane(this.history[this.historyIndex]);
+  }
+
+  /** Termina el recorrido de Ctrl+Tab. */
+  endLastUsed() {
+    if (this.historyIndex === -1) return;
+    const id = this.history[this.historyIndex];
+    this.historyIndex = -1;
+    if (id) this.noteFocus(id);
   }
 
   moveTab(delta: number) {
@@ -208,7 +257,9 @@ class Workspace {
     const ti = this.tabs.findIndex((t) => panesOf(t.root).some((p) => p.id === id));
     if (ti < 0) return;
     this.active = ti;
-    this.tabs[ti].focus = id;
+    const tab = this.tabs[ti];
+    if (tab.zoomed && tab.focus !== id) tab.zoomed = false;
+    tab.focus = id;
   }
 
   cyclePane(delta: number) {

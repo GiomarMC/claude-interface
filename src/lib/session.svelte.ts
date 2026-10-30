@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { modelName } from "./format";
+import { prefs } from "./prefs.svelte";
 
 export type Attachment = {
   name: string;
@@ -117,6 +118,9 @@ export class Session {
   private effortOverride = false;
 
   private pending = new Map<string, (r: any) => void>();
+  /** Procesos reemplazados al reiniciar: sus últimas líneas (y su salida) se ignoran. */
+  private stalePids = new Set<number>();
+  private pid: number | null = null;
   private toolIndex = new Map<string, number>();
   private unlisten: (() => void)[] = [];
 
@@ -125,22 +129,22 @@ export class Session {
       if (v && !this.version) this.version = v;
     });
     this.unlisten.push(
-      await listen<{ key: string; line: string }>("claude-event", (e) => {
-        if (e.payload.key !== this.key) return;
+      await listen<{ key: string; pid: number; line: string }>("claude-event", (e) => {
+        if (e.payload.key !== this.key || this.stalePids.has(e.payload.pid)) return;
         try {
           this.handle(JSON.parse(e.payload.line));
         } catch (err) {
           console.error("línea inválida", e.payload.line, err);
         }
       }),
-      await listen<string>("claude-exit", (e) => {
-        if (e.payload !== this.key) return;
+      await listen<{ key: string; pid: number }>("claude-exit", (e) => {
+        if (e.payload.key !== this.key || this.stalePids.has(e.payload.pid)) return;
         this.running = false;
         this.busy = false;
         this.live = null;
       }),
-      await listen<{ key: string; line: string }>("claude-stderr", (e) => {
-        if (e.payload.key !== this.key) return;
+      await listen<{ key: string; pid: number; line: string }>("claude-stderr", (e) => {
+        if (e.payload.key !== this.key || this.stalePids.has(e.payload.pid)) return;
         this.stderr = [...this.stderr.slice(-30), e.payload.line];
       }),
     );
@@ -148,8 +152,13 @@ export class Session {
 
   private async loadSettings() {
     const settings: any = await invoke("user_settings", { cwd: this.cwd });
-    if (!this.effortOverride) this.effort = settings?.effortLevel ?? "";
-    if (!this.modelOverride) this.modelPref = settings?.model ?? "";
+    // Como en la TUI, la última configuración usada vale para cualquier sesión nueva.
+    const last = await prefs.lastClaude();
+    if (last.effort) [this.effort, this.effortOverride] = [last.effort, true];
+    else if (!this.effortOverride) this.effort = settings?.effortLevel ?? "";
+    if (last.model) [this.modelPref, this.modelOverride] = [last.model, true];
+    else if (!this.modelOverride) this.modelPref = settings?.model ?? "";
+    if (MODES.includes(last.mode as PermissionMode)) this.mode = last.mode as PermissionMode;
     const sl = settings?.statusLine;
     this.statusLineCommand = sl?.type === "command" && sl.command ? sl.command : null;
   }
@@ -179,7 +188,8 @@ export class Session {
 
     if (opts.resume && !opts.keepItems) await this.loadHistory(opts.resume);
 
-    await invoke("start_session", {
+    if (this.pid !== null) this.stalePids.add(this.pid);
+    this.pid = await invoke<number>("start_session", {
       opts: {
         key: this.key,
         cwd: opts.cwd,
@@ -193,6 +203,8 @@ export class Session {
     this.refreshGit();
 
     const init = await this.control({ subtype: "initialize" });
+    // Lo que muestra la interfaz es el modo que tiene de verdad el CLI.
+    this.syncMode(init?.current_permission_mode);
     const cmds: SlashCommand[] = (init?.commands ?? []).map((c: any) => ({
       name: c.name,
       description: c.description ?? "",
@@ -209,6 +221,8 @@ export class Session {
   }
 
   async stop() {
+    if (this.pid !== null) this.stalePids.add(this.pid);
+    this.pid = null;
     await invoke("stop_session", { key: this.key });
     this.running = false;
   }
@@ -304,7 +318,16 @@ export class Session {
 
   async setMode(mode: PermissionMode) {
     this.mode = mode;
-    if (this.running) await this.control({ subtype: "set_permission_mode", mode });
+    // Saltarse todos los permisos no se hereda: hay que elegirlo cada vez.
+    if (mode !== "bypassPermissions") prefs.rememberClaude({ mode });
+    if (!this.running) return;
+    const r = await this.control({ subtype: "set_permission_mode", mode });
+    this.syncMode(r?.permissionMode ?? r?.mode);
+  }
+
+  private syncMode(mode: unknown) {
+    const m = mode === "manual" ? "default" : mode;
+    if (MODES.includes(m as PermissionMode)) this.mode = m as PermissionMode;
   }
 
   cycleMode() {
@@ -315,8 +338,11 @@ export class Session {
   async setModel(model: string) {
     this.modelPref = model;
     this.modelOverride = true;
+    prefs.rememberClaude({ model });
     const r = this.running ? await this.control({ subtype: "set_model", model }) : null;
     this.notice(`Modelo: ${model}`, "info");
+    // El id real del modelo nuevo llega con el contexto (o con el init al reiniciar).
+    this.model = "";
     if (r === null && this.running) await this.restartKeeping();
     this.refreshContext();
   }
@@ -324,6 +350,7 @@ export class Session {
   async setEffort(level: string) {
     this.effort = level;
     this.effortOverride = true;
+    prefs.rememberClaude({ effort: level });
     this.notice(`Esfuerzo: ${level}`, "info");
     if (this.running && !this.busy) await this.restartKeeping();
   }
@@ -406,8 +433,7 @@ export class Session {
       this.model = m.model;
       this.version = m.claude_code_version ?? this.version;
       this.outputStyle = m.output_style ?? "default";
-      const mode = m.permissionMode === "manual" ? "default" : m.permissionMode;
-      if (MODES.includes(mode)) this.mode = mode;
+      this.syncMode(m.permissionMode);
       this.fast = m.fast_mode_state === "on";
     } else if (m.subtype === "thinking_tokens") {
       this.thinkingTokens = m.estimated_tokens ?? this.thinkingTokens;

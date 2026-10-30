@@ -139,6 +139,11 @@
         if (!multiTab) return false;
         ws.cycleTab(action === "next_tab" ? 1 : -1);
         return true;
+      case "last_tab":
+      case "last_tab_reverse":
+        if (ws.allPanes.length < 2) return false;
+        ws.lastUsedPane(action === "last_tab_reverse");
+        return true;
       case "move_tab_left":
       case "move_tab_right":
         if (!multiTab) return false;
@@ -202,6 +207,21 @@
     }
   }
 
+  // Cada panel que recibe el foco pasa a ser el más reciente para Ctrl+Tab.
+  $effect(() => {
+    const id = ws.pane?.id;
+    if (id) ws.noteFocus(id);
+  });
+
+  // Al soltar los modificadores termina el recorrido de Ctrl+Tab, como en Konsole.
+  function onKeyUpCapture(e: KeyboardEvent) {
+    // En el keyup de un modificador, algunos motores aún lo dan por pulsado.
+    const held = (key: string, on: boolean) => on && e.key !== key;
+    if (!held("Control", e.ctrlKey) && !held("Shift", e.shiftKey) && !held("Alt", e.altKey) && !held("Meta", e.metaKey)) {
+      ws.endLastUsed();
+    }
+  }
+
   // Teclas propias de la interfaz de Claude (en la terminal las recibe el shell).
   function onKey(e: KeyboardEvent) {
     if (ws.pane?.mode !== "claude") return;
@@ -250,7 +270,7 @@
   const pct = (n: number) => `${n * 100}%`;
 </script>
 
-<svelte:window onkeydowncapture={onKeyCapture} onkeydown={onKey} />
+<svelte:window onkeydowncapture={onKeyCapture} onkeydown={onKey} onkeyupcapture={onKeyUpCapture} onblur={() => ws.endLastUsed()} />
 
 <main>
     <UpdateBanner busy={ws.allPanes.some(({ pane }) => pane.session.busy)} oninstall={() => updater.install(ws.pane?.mode === "claude" ? ws.pane.session.sessionId : null, ws.cwd)} />

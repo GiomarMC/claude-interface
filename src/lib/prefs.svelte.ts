@@ -47,6 +47,8 @@ type Config = {
   terminal?: string;
   /** Buscar actualizaciones al abrir (por defecto sí). */
   autoUpdate?: boolean;
+  /** Último modelo, esfuerzo y modo usados en Claude; los heredan las sesiones nuevas. */
+  claude?: { model?: string; effort?: string; mode?: string };
 };
 
 // Roles de los temas *-ansi de Claude Code → índice en la paleta de la terminal.
@@ -150,6 +152,17 @@ class Prefs {
     if (terminalChanged) await this.loadTerminal();
     else this.apply();
     await invoke("save_app_config", { config: next });
+  }
+
+  /** Última configuración de Claude, leída del disco por si la cambió otra ventana. */
+  async lastClaude(): Promise<NonNullable<Config["claude"]>> {
+    const c = await invoke<Config>("app_config").catch(() => this.config);
+    return c.claude ?? {};
+  }
+
+  /** Recuerda la última configuración de Claude, como la TUI. */
+  async rememberClaude(patch: NonNullable<Config["claude"]>) {
+    await this.set({ claude: { ...(await this.lastClaude()), ...patch } });
   }
 
   zoom(delta: number) {

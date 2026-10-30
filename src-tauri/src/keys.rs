@@ -158,8 +158,8 @@ fn os_defaults() -> Binds {
         add(&mut b, "new_tab", &["meta+t"]);
         add(&mut b, "close_pane", &["meta+w"]);
         add(&mut b, "new_window", &["meta+n"]);
-        add(&mut b, "next_tab", &["meta+shift+]", "ctrl+tab"]);
-        add(&mut b, "prev_tab", &["meta+shift+[", "ctrl+shift+tab"]);
+        add(&mut b, "next_tab", &["meta+shift+]"]);
+        add(&mut b, "prev_tab", &["meta+shift+["]);
         digits(&mut b, "meta+", 9);
         add(&mut b, "split_right", &["meta+d"]);
         add(&mut b, "split_down", &["meta+shift+d"]);
@@ -179,8 +179,8 @@ fn os_defaults() -> Binds {
         add(&mut b, "new_tab", &["ctrl+shift+t"]);
         add(&mut b, "close_pane", &["ctrl+shift+w"]);
         add(&mut b, "new_window", &["ctrl+shift+n"]);
-        add(&mut b, "next_tab", &["ctrl+tab", "ctrl+pagedown"]);
-        add(&mut b, "prev_tab", &["ctrl+shift+tab", "ctrl+pageup"]);
+        add(&mut b, "next_tab", &["ctrl+pagedown"]);
+        add(&mut b, "prev_tab", &["ctrl+pageup"]);
         add(&mut b, "move_tab_left", &["ctrl+shift+pageup"]);
         add(&mut b, "move_tab_right", &["ctrl+shift+pagedown"]);
         digits(&mut b, "alt+", 9);
@@ -211,6 +211,8 @@ const KONSOLE_ACTIONS: &[(&str, &str)] = &[
     ("close-active-view", "close_pane"),
     ("next-tab", "next_tab"),
     ("previous-tab", "prev_tab"),
+    ("last-used-tab", "last_tab"),
+    ("last-used-tab-reverse", "last_tab_reverse"),
     ("move-tab-to-left", "move_tab_left"),
     ("move-tab-to-right", "move_tab_right"),
     ("split-view-left-right", "split_right"),
@@ -235,9 +237,10 @@ fn konsole() -> Binds {
     add(&mut b, "new_tab", &["Ctrl+Shift+T"]);
     add(&mut b, "new_window", &["Ctrl+Shift+N"]);
     add(&mut b, "close_pane", &["Ctrl+Shift+W", "Ctrl+Shift+X"]);
-    // Ctrl+Tab es "última pestaña usada" en Konsole; con dos pestañas es lo mismo.
-    add(&mut b, "next_tab", &["Shift+Right", "Ctrl+PgDown", "Ctrl+Tab"]);
-    add(&mut b, "prev_tab", &["Shift+Left", "Ctrl+PgUp", "Ctrl+Shift+Tab"]);
+    add(&mut b, "next_tab", &["Shift+Right", "Ctrl+PgDown"]);
+    add(&mut b, "prev_tab", &["Shift+Left", "Ctrl+PgUp"]);
+    add(&mut b, "last_tab", &["Ctrl+Tab"]);
+    add(&mut b, "last_tab_reverse", &["Ctrl+Shift+Tab"]);
     add(&mut b, "move_tab_left", &["Ctrl+Alt+Left"]);
     add(&mut b, "move_tab_right", &["Ctrl+Alt+Right"]);
     digits(&mut b, "Alt+", 9);
@@ -1034,6 +1037,17 @@ pub async fn terminal_keys(which: String) -> Keymap {
         t => read(t).map(|_| t.to_string()),
     };
     let mut binds = name.as_deref().and_then(terminal_binds).unwrap_or_default();
+    // Ctrl+Tab recorre las pestañas por orden de uso, como en Konsole, aunque
+    // la terminal lo use para la siguiente (salvo que se haya cambiado en Konsole).
+    for (action, key) in [("last_tab", "ctrl+tab"), ("last_tab_reverse", "ctrl+shift+tab")] {
+        if binds.get(action).is_some_and(|k| !k.is_empty()) {
+            continue;
+        }
+        for keys in binds.values_mut() {
+            keys.retain(|k| k != key);
+        }
+        binds.insert(action.into(), vec![key.into()]);
+    }
     // Lo que la terminal no tiene (p. ej. divisiones en GNOME Terminal) sale
     // de los atajos del sistema, sin quitarle combinaciones a la terminal.
     let used: Vec<String> = binds.values().flatten().cloned().collect();
